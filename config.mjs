@@ -85,6 +85,16 @@ function DetectFirmwareVersion()
         return ps4_9_00;
     }
 
+    //get user agent for PS5 (taken from PS5 Specter Exploit Host)
+    const supportedFirmwares = ["1.00","1.01","1.02","1.05","1.12","1.14","2.00","2.10","2.20","2.25","2.26","2.30","2.50","2.70","3.00","3.10","3.20","3.21","4.00", "4.02", "4.03", "4.50", "4.51","5.00","5.02","5.10","5.50"];
+    const fw_idx = navigator.userAgent.indexOf('PlayStation; PlayStation 5/') + 27;
+    const fw_str = navigator.userAgent.substring(fw_idx, fw_idx + 4);
+
+    if (supportedFirmwares.includes(fw_str)) 
+    {
+        return ps5_5_00;
+    }
+
 }
 
 export let target = DetectFirmwareVersion();
