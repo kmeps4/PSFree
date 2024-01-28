@@ -220,6 +220,9 @@ function init_gadget_map(gadget_map, offset_map, base_addr) {
     }
 }
 
+// helper object for ROP
+const rop_ta = document.createElement('textarea');
+
 class Chain900Base extends ChainBase {
     constructor() {
         super();
@@ -482,10 +485,9 @@ class Chain900 extends Chain900Base {
         // that we think is large enough for all of them.
         const vtable_size = 0x1000;
         const webcore_ta_size = 0x180;
-        const rop_ta = {};
+
         const ta_clone = {};
         this.ta_clone = ta_clone;
-        this.rop_ta = rop_ta;
         const clone_p = mem.addrof(ta_clone);
         const ta_p = mem.addrof(rop_ta);
 

