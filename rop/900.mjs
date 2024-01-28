@@ -482,11 +482,12 @@ class Chain900 extends Chain900Base {
         // that we think is large enough for all of them.
         const vtable_size = 0x1000;
         const webcore_ta_size = 0x180;
-
+        const rop_ta = {};
         const ta_clone = {};
         this.ta_clone = ta_clone;
+        this.rop_ta = rop_ta;
         const clone_p = mem.addrof(ta_clone);
-        //const ta_p = mem.addrof(rop_ta);
+        const ta_p = mem.addrof(rop_ta);
 
         for (let i = js_size; i < js_ta_size; i += 8) {
             clone_p.write64(i, ta_p.read64(i));
