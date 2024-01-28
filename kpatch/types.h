@@ -1,4 +1,4 @@
-<!-- Copyright (C) 2023 anonymous
+/* Copyright (C) 2024 anonymous
 
 This file is part of PSFree.
 
@@ -13,19 +13,16 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
--->
-<html>
-    <head>
-        <meta charset='utf-8'>
-        <title>PSFree 1.4.0</title>
-    </head>
+along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-    <body>
-        PS4/PS5 exploit using CVE-2022-22620<br>
-        PS4 versions vulnerable: 6.xx-9.xx (tested 6.00-9.60)<br>
-        PS5 versions vulnerable: 1.xx-5.xx (tested 1.00-5.50)<br>
-        <a href="./about.html" data-jslicense="1">JavaScript license information</a>
-    </body>
-    <script type='module' src='alert.mjs'></script>
-</html>
+#pragma once
+
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long long u64;
+
+typedef signed char s8;
+typedef signed short s16;
+typedef signed int s32;
+typedef signed long long s64;

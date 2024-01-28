@@ -28,14 +28,31 @@ import * as o from './offset.mjs';
 
 // put the sycall names that you want to use here
 export const syscall_map = new Map(Object.entries({
+    'close': 6,
+    'setuid' : 23,
     'getuid' : 24,
+    'mprotect': 74,
+    'socket' : 97,
+    'fchmod' : 124,
+    'mlock' : 203,
+    'kqueue' : 362,
+    'kevent' : 363,
+    'mmap' : 477,
+    // for JIT shared memory
+    'jitshm_create' : 533,
+    'jitshm_alias' : 534,
 }));
 
 // Extra space to allow a ROP chain to push temporary values. It must pop all
 // of it before reaching a "ret" instruction, else the instruction will pop one
 // of the temporaries as its return address.
-const upper_pad = 0x100;
-const stack_size = 0x1000;
+//
+// Also space for additional frames when we call a function since we do not
+// pivot the call to another stack (the called function's stack pointer is
+// pointing to our ROP stack as well).
+const upper_pad = 0x10000;
+// maximum size of the ROP stack
+const stack_size = 0x10000;
 const total_size = upper_pad + stack_size;
 
 const argument_pops = [

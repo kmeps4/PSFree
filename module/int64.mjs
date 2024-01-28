@@ -114,6 +114,11 @@ export class Int {
         this.buffer = buffer;
         this.bytes = bytes;
 
+        this.eq = operation(function eq(b) {
+            const a = this;
+            return a.low() === b.low() && a.high() === b.high();
+        }, 1);
+
         this.neg = operation(function neg() {
             let type = this.constructor;
 

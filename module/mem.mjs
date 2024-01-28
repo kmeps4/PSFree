@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 anonymous
+/* Copyright (C) 2023-2024 anonymous
 
 This file is part of PSFree.
 
@@ -208,31 +208,6 @@ class MemoryBase {
 }
 
 export class Memory extends MemoryBase {
-    constructor(main, main_addr, worker, worker_addr, worker_index)  {
-        super();
-
-        this.main = main;
-        this.main_addr = main_addr;
-        this.worker = worker;
-        this.worker_addr = worker_addr;
-
-        // The initial creation of the "a" property will change the butterfly
-        // address. Do it now so we can cache it for addrof().
-        worker.a = 0; // dummy value, we just want to create the "a" property
-        this.butterfly = read64(main, worker_index + o.js_butterfly);
-
-        write32(main, worker_index + o.view_m_length, 0xffffffff);
-        // setup main's m_vector to worker
-        write64(main, worker_index + o.view_m_vector, main_addr);
-        write64(worker, o.view_m_vector, worker_addr);
-
-        this._current_addr = main_addr;
-
-        init_module(this);
-    }
-}
-
-export class Memory2 extends MemoryBase {
     constructor(main, worker)  {
         super();
 
