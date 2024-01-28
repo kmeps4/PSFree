@@ -485,7 +485,7 @@ class Chain950 extends Chain950Base {
         const ta_clone = {};
         this.ta_clone = ta_clone;
         const clone_p = mem.addrof(ta_clone);
-        const ta_p = mem.addrof(rop_ta);
+        //const ta_p = mem.addrof(rop_ta);
 
         for (let i = js_size; i < js_ta_size; i += 8) {
             clone_p.write64(i, ta_p.read64(i));
