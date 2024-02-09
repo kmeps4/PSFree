@@ -1,0 +1,23 @@
+The kernel exploit for the PS4 8.0x firmware series is based on pOOBs4.
+exfathax_pico.img is from pOOBs4. This is currently a work in progress.
+
+steps:
+* write the exfathax_pico.img file to a USB drive
+    $ dd if=exfathax_pico.img of=/dev/<your USB drive>
+* modify exploit.mjs to run rop/800.mjs:
+    import('./code.mj') -> import('./rop/800.mjs')
+
+loading the exploit:
+* have the browser load index.html
+* wait for the "insert USB" alert dialog to prompt you
+* Wait for this console notification to pop up: "This USB storage device's file
+  system is unsupported".
+* close the "insert USB" alert dialog by clicking "OK"
+* keep closing future alert dialogs
+* once you reach a log saying "kernel exploit succeeded", you're done
+
+exFAT heap overflow bug hackerone report:
+https://hackerone.com/reports/1340942
+
+pOOBs4:
+https://github.com/ChendoChap/pOOBs4

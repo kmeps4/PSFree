@@ -35,11 +35,7 @@ export function make_buffer(addr, size) {
     // see possiblySharedBuffer() from
     // WebKit/Source/JavaScriptCore/runtime/JSArrayBufferViewInlines.h
     // at webkitgtk 2.34.4
-    //
-    // Views with m_mode < WastefulTypedArray don't have an ArrayBuffer object
-    // associated with them, if we ask for view.buffer, the view will be
-    // converted into a WastefulTypedArray and an ArrayBuffer will be created.
-    //
+
     // We will create an OversizeTypedArray via requesting an Uint8Array whose
     // number of elements will be greater than fastSizeLimit (1000).
     //
@@ -66,6 +62,11 @@ export function make_buffer(addr, size) {
     const copy = new Uint8Array(u.length);
     copy.set(u);
 
+    // Views with m_mode < WastefulTypedArray don't have an ArrayBuffer object
+    // associated with them, if we ask for view.buffer, the view will be
+    // converted into a WastefulTypedArray and an ArrayBuffer will be created.
+    // This is done by calling slowDownAndWasteMemory().
+    //
     // We can't use slowDownAndWasteMemory() on u since that will create a
     // JSC::ArrayBufferContents with its m_data pointing to addr. On the
     // ArrayBuffer's death, it will call WTF::fastFree() on m_data. This can

