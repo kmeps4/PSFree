@@ -57,7 +57,7 @@ export function set_target(value) {
     target = value;
 }
 
-function DetectFirmwareVersion()
+function DetectFirmwareVersion() //function by kameleon :)
 {
     var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 19, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
     
