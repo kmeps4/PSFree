@@ -28,20 +28,20 @@ inline u64 rdmsr(u32 msr) {
     return (low | ((u64)high << 32));
 }
 
-void enable_cr0_wp(void) {
+inline void enable_cr0_wp(void) {
     asm(
         "mov rax, cr0\n"
         "or rax, 0x10000\n"
         "mov cr0, rax\n"
-    );
+    ::: "rax");
 }
 
-void disable_cr0_wp(void) {
+inline void disable_cr0_wp(void) {
     asm(
         "mov rax, cr0\n"
         "and rax, ~0x10000\n"
         "mov cr0, rax\n"
-    );
+    ::: "rax");
 }
 
 inline void write8(void *addr, size_t offset, u8 value) {

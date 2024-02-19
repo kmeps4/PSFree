@@ -1239,6 +1239,7 @@ async function kexec_payload(kchain, sd, mmap_area, scratch) {
         die('kpatch() failed');
     }
     debug_log('kernel exploit succeeded!');
+
 }
 
 async function get_patches(url) {
