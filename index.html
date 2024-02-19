@@ -31,7 +31,7 @@ if (navigator.userAgent.includes('PlayStation 4')) {
             alert(`Current Firmware: ${UA}. Are You Ready?`);
         } else {
             alert(`Current PS4 Firmware Not Supported`);
-			window.stop();
+	    window.stop();
         }
     }
 } else if (navigator.userAgent.includes('PlayStation 5')) {
@@ -40,8 +40,11 @@ if (navigator.userAgent.includes('PlayStation 4')) {
         alert(`Current Firmware: ${UA}. Are You Ready?`);
     } else {
         alert(`Current PS5 Firmware (${UA}) Not Supported`);
-		window.stop();
+	window.stop();
     }
+} else {
+        alert(`Current System Not Supported`);
+	window.stop();
 }
 </script>
     <head>
