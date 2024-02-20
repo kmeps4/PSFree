@@ -15,6 +15,33 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+<script>
+if (navigator.userAgent.includes('PlayStation 4')) {
+    var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 19, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
+    if (["6.00", "6.02", "6.10", "6.20", "6.50", "6.70", "6.71", "6.72", "7.01", "7.02", "7.50", "7.51", "7.55", "8.00", "8.01", "8.03"].includes(UA)) { 
+        alert(`Current PS4 Firmware: ${UA}. Are You Ready?`);
+    } else {
+        var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 18, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
+        if (["8.50", "8.51", "9.00", "9.03", "9.04", "9.50", "9.51", "9.60"].includes(UA)) {
+            alert(`Current PS4 Firmware: ${UA}. Are You Ready?`);
+        } else {
+            alert(`Current PS4 Firmware ${UA} Is Not Supported`);
+	    window.stop();
+        }
+    }
+} else if (navigator.userAgent.includes('PlayStation 5')) {
+    var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 32, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 5/","");
+    if (["1.00", "1.01", "1.02", "1.05", "1.12", "1.14", "2.00", "2.10", "2.20", "2.25", "2.26", "2.30", "2.50", "2.70", "3.00", "3.10", "3.20", "3.21", "4.00", "4.02", "4.03", "4.50", "4.51", "5.00", "5.02", "5.10", "5.50"].includes(UA)) { 
+        alert(`Current Firmware: ${UA}. Are You Ready?`);
+    } else {
+        alert(`Current PS5 Firmware ${UA} Is Not Supported`);
+	window.stop();
+    }
+} else {
+        alert(`Current System Is Not Supported`);
+	window.stop();
+}
+</script>
 <html>
     <head>
         <meta charset='utf-8'>
