@@ -119,7 +119,7 @@ u64 kpatch(u64 res, u64 *error) {
     // }
     //
     // jumps to uap->rdi
-    // u64 sys_kexec(struct thread td, struct args *uap)
+    // u32 sys_kexec(struct thread td, struct args *uap)
 
     // sysent[11]
     const size_t offset_sysent_11 = 0x10fc6e0;
