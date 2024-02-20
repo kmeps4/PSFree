@@ -58,31 +58,22 @@ export function set_target(value) {
 }
 
 function DetectFirmwareVersion() { //function by kameleon :)
-if (navigator.userAgent.includes('PlayStation 4')) {
-    var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 19, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
-    if (["6.00", "6.02", "6.10", "6.20"].includes(UA)) {
-        return ps4_6_00;
-    } else if (["6.50", "6.70", "6.71", "6.72"].includes(UA)) {
-	return  ps4_6_50;
-    } else if (["7.01", "7.02", "7.50", "7.51", "7.55", "8.00", "8.01", "8.03"].includes(UA)) {
-	return ps4_8_03;
-    } else {
-        var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 18, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
-        if (["8.50", "8.51"].includes(UA)) {
-	return ps4_8_03;
-        } else {
-        var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 18, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
-        if (["9.00", "9.03", "9.04", "9.50", "9.51", "9.60"].includes(UA)) {
-	return  ps4_9_00;
+    if (navigator.userAgent.includes('PlayStation 4')) {
+        if (fwFromUA >= 6.00 && fwFromUA <= 6.20) {
+            return ps4_6_00;
+        } else if (fwFromUA >= 6.50 && fwFromUA <= 6.72) {
+            return ps4_6_50;
+        } else if (fwFromUA >= 7.01 && fwFromUA <= 8.51) {
+            return ps4_8_03;
+        } else if (fwFromUA >= 9.00 && fwFromUA <= 9.60) {
+            return ps4_9_00;
         }
-      }
+    } else if (navigator.userAgent.includes('PlayStation 5')) {
+        if (fwFromUA >= 1.00 && fwFromUA <= 5.50) {
+            return ps5_5_00;
+        }
     }
-} else if (navigator.userAgent.includes('PlayStation 5')) {
-    var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 32, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 5/","");
-    if (["1.00", "1.01", "1.02", "1.05", "1.12", "1.14", "2.00", "2.10", "2.20", "2.25", "2.26", "2.30", "2.50", "2.70", "3.00", "3.10", "3.20", "3.21", "4.00", "4.02", "4.03", "4.50", "4.51", "5.00", "5.02", "5.10", "5.50"].includes(UA)) { 
-	return ps5_5_00;
-    }
-  }
 }
+
 
 export let target = DetectFirmwareVersion();
