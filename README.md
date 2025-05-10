@@ -1,5 +1,9 @@
 # PSFree version 1.5.0
 
+Work in Progress Port to PS4 fw 9.00
+
+PR are welcome
+
 PSFree is a collection of exploits for the PS4 console. The main focus of the 
 repo is for the PS4 but we try to make things portable to PS5.
 
