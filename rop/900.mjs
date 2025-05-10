@@ -197,8 +197,8 @@ const libc_gadget_offsets = new Map(Object.entries({
     'mov qword ptr [rsi], rcx; ret' : 0x00000000000cf982,
     'setjmp' : offset_libc_setjmp,
     'longjmp' : offset_libc_longjmp,
-    //'getcontext' : 0x258f4,
-    'setcontext' : 0x638,
+    //'getcontext' : 0x258f4, Needs porting to 900
+    //'setcontext' : 0x638, Needs porting to 900
 }));
 
 const libkernel_gadget_offsets = new Map(Object.entries({
