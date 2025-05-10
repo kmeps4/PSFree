@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 anonymous
+/* Copyright (C) 2024-2025 anonymous
 
 This file is part of PSFree.
 
@@ -15,15 +15,55 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
+// script for dumping libSceNKWebKit.sprx, libkernel_web.sprx, and
+// libSceLibcInternal.sprx
+
+// This script is for firmware 8.0x. You need to port this to your firmware if
+// you want to use it. It only dumps the .text and PT_SCE_RELRO segments. It
+// doesn't dump the entire ELF file.
+//
+// There's also some miscellaneous functions to dump functions from WebKit that
+// were studied during the development of PSFree.
+
+// libkernel libraries contain syscalls
+// syscalls are enforced to be called from these libraries
+//
+// libkernel_web.sprx is used by the browser in firmwares >= 6.00
+// libkernel.sprx for firmwares below
+//
+// libkernel_sys.sprx contains syscalls that aren't found in the others, such
+// as mount and nmount
+//
+// the BD-J app uses libkernel_sys.sprx for example
+
+// Porting HOWTO:
+//
+// You can only dump the WebKit module (libSceNKWebKit.sprx for FW >= 6.00,
+// else libSceWebkit2.sprx) initially via dump_libwebkit() on any firmware.
+// We'll use the WebKit dump to search for imported functions from libkernel
+// and LibcInternal. Once we resolve the imports, we can use find_base() to get
+// the boundaries of these modules.
+//
+// Most of the work is done for you at dump_lib*(). You just need to find the
+// offset of the imported functions relative to WebKit's base address.
+//
+// import candidates:
+//
+// __stack_chk_fail() is a good import from libkernel to search for as it's
+// easy to find since most functions are protected by a stack canary.
+//
+// For a LibcInternal import we searched for strlen() but you can search for
+// any libc function such as memcpy().
+
 import * as config from './config.mjs';
 
 import { Int } from './module/int64.mjs';
 import { Addr, mem } from './module/mem.mjs';
 import { make_buffer, find_base, resolve_import } from './module/memtools.mjs';
-import { KB, MB } from './module/constants.mjs';
+import { KB, MB } from './module/offset.mjs';
 
 import {
-    debug_log,
+    log,
     align,
     die,
     send,
@@ -51,9 +91,9 @@ function get_boundaries(leak) {
 // dump a module's .text and PT_SCE_RELRO segments only
 function dump(name, lib_base, lib_end) {
     // assumed size < 4GB
-    const lib_size = lib_end.sub(lib_base).low();
-    debug_log(`${name} base: ${lib_base}`);
-    debug_log(`${name} size: ${lib_size}`);
+    const lib_size = lib_end.sub(lib_base).lo;
+    log(`${name} base: ${lib_base}`);
+    log(`${name} size: ${lib_size}`);
     const lib = make_buffer(
         lib_base,
         lib_size
@@ -62,7 +102,7 @@ function dump(name, lib_base, lib_end) {
         url,
         lib,
         `${name}.sprx.text_${lib_base}.bin`,
-        () => debug_log(`${name} sent`)
+        () => log(`${name} sent`)
     );
 }
 
@@ -76,9 +116,9 @@ function dump_libwebkit() {
     // in PT_SCE_RELRO segment (p_type = 0x6100_0010)
     addr = addr.readp(0);
 
-    debug_log(`vtable: ${addr}`);
+    log(`vtable: ${addr}`);
     const vtable = make_buffer(addr, 0x400);
-    send(url, vtable, `vtable_${addr}.bin`, () => debug_log('vtable sent'));
+    send(url, vtable, `vtable_${addr}.bin`, () => log('vtable sent'));
 
     const [lib_base, lib_end] = get_boundaries(addr);
     dump('libSceNKWebKit', lib_base, lib_end);
@@ -94,7 +134,7 @@ function dump_libkernel(libwebkit_base) {
     const stack_chk_fail_import = libwebkit_base.add(offset);
 
     const libkernel_leak = resolve_import(stack_chk_fail_import);
-    debug_log(`__stack_chk_fail import: ${libkernel_leak}`);
+    log(`__stack_chk_fail import: ${libkernel_leak}`);
 
     const [lib_base, lib_end] = get_boundaries(libkernel_leak);
     dump('libkernel_web', lib_base, lib_end);
@@ -108,7 +148,7 @@ function dump_libc(libwebkit_base) {
     const strlen_import = libwebkit_base.add(offset);
 
     const libc_leak = resolve_import(strlen_import);
-    debug_log(`strlen import: ${libc_leak}`);
+    log(`strlen import: ${libc_leak}`);
 
     const [lib_base, lib_end] = get_boundaries(libc_leak);
     dump('libSceLibcInternal', lib_base, lib_end);
@@ -158,7 +198,7 @@ function dump_eval() {
         url,
         make_buffer(impl, 0x800),
         `eval_dump_offset_${offset}.bin`,
-        () => debug_log('sent')
+        () => log('sent')
     );
 }
 
@@ -186,8 +226,6 @@ function dump_scrollLeft() {
         url,
         make_buffer(getter, 0x800),
         `scrollLeft_getter_dump_offset_${offset}.bin`,
-        () => debug_log('sent')
+        () => log('sent')
     );
 }
-
-dump_scrollLeft();

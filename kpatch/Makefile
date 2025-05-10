@@ -1,14 +1,14 @@
 TARGET = 80x
 ENTRY = 0x900000000
+src = $(TARGET).c
 
 CC = gcc
+CFLAGS = -O -Wno-int-conversion -fno-strict-aliasing -masm=intel -nostartfiles
+CFLAGS += -fwrapv -no-pie -Ttext=$(ENTRY) -Tscript.ld -Wl,--build-id=none
+CFLAGS += -fwrapv-pointer -std=gnu11
 
 .PHONY: all
 all: $(TARGET).elf
-
-CFLAGS = -O -Wno-int-conversion -fno-strict-aliasing -masm=intel -nostartfiles
-CFLAGS += -fwrapv -no-pie -Ttext=$(ENTRY) -Tscript.ld -Wl,--build-id=none
-CFLAGS += -fwrapv-pointer
 
 $(TARGET).elf: $(TARGET).o
 	$(CC) $(TARGET).o -o $(TARGET).elf $(CFLAGS)
@@ -23,7 +23,5 @@ clean:
 	$(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$;
-
-src = $(TARGET).c
 
 include $(src:.c=.d)

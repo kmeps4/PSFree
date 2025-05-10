@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 anonymous
+/* Copyright (C) 2023-2025 anonymous
 
 This file is part of PSFree.
 
@@ -15,184 +15,119 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-function check_range(x) {
-    return (-0x80000000 <= x) && (x <= 0xffffffff);
+// cache some constants
+const isInteger = Number.isInteger;
+
+function check_not_in_range(x) {
+    return !(isInteger(x) && -0x80000000 <= x && x <= 0xffffffff);
 }
 
-function unhexlify(hexstr) {
-    if (hexstr.substring(0, 2) === "0x") {
-        hexstr = hexstr.substring(2);
-    }
-    if (hexstr.length % 2 === 1) {
-        hexstr = '0' + hexstr;
-    }
-    if (hexstr.length % 2 === 1) {
-        throw TypeError("Invalid hex string");
+// use this if you want to support objects convertible to Int but only need
+// their low/high bits. creating a Int is slower compared to just using this
+// function
+export function lohi_from_one(low) {
+    if (low instanceof Int) {
+        return low._u32.slice();
     }
 
-    let bytes = new Uint8Array(hexstr.length / 2);
-    for (let i = 0; i < hexstr.length; i += 2) {
-        let new_i = hexstr.length - 2 - i;
-        let substr = hexstr.slice(new_i, new_i + 2);
-        bytes[i / 2] = parseInt(substr, 16);
+    if (check_not_in_range(low)) {
+        throw TypeError(`low not a 32-bit integer: ${low}`);
     }
 
-    return bytes;
+    return [low >>> 0, low < 0 ? -1 >>> 0 : 0];
 }
 
-// Decorator for Int instance operations. Takes care
-// of converting arguments to Int instances if required.
-function operation(f, nargs) {
-    return function () {
-        if (arguments.length !== nargs)
-            throw Error("Not enough arguments for function " + f.name);
-        let new_args = [];
-        for (let i = 0; i < arguments.length; i++) {
-            if (!(arguments[i] instanceof Int)) {
-                new_args[i] = new Int(arguments[i]);
-            } else {
-                new_args[i] = arguments[i];
-            }
-        }
-        return f.apply(this, new_args);
-    };
-}
-
+// immutable 64-bit integer
 export class Int {
     constructor(low, high) {
-        let buffer = new Uint32Array(2);
-        let bytes = new Uint8Array(buffer.buffer);
-
-        if (arguments.length > 2) {
-            throw TypeError('Int takes at most 2 args');
-        }
-        if (arguments.length === 0) {
-            throw TypeError('Int takes at min 1 args');
-        }
-        let is_one = false;
-        if (arguments.length === 1) {
-            is_one = true;
+        if (high === undefined) {
+            this._u32 = new Uint32Array(lohi_from_one(low));
+            return;
         }
 
-        if (!is_one) {
-            if (typeof (low) !== 'number'
-                && typeof (high) !== 'number') {
-                throw TypeError('low/high must be numbers');
-            }
+        if (check_not_in_range(low)) {
+            throw TypeError(`low not a 32-bit integer: ${low}`);
         }
 
-        if (typeof low === 'number') {
-            if (!check_range(low)) {
-                throw TypeError('low not a valid value: ' + low);
-            }
-            if (is_one) {
-                high = 0;
-                if (low < 0) {
-                    high = -1;
-                }
-            } else {
-                if (!check_range(high)) {
-                    throw TypeError('high not a valid value: ' + high);
-                }
-            }
-            buffer[0] = low;
-            buffer[1] = high;
-        } else if (typeof low === 'string') {
-            bytes.set(unhexlify(low));
-        } else if (typeof low === 'object') {
-            if (low instanceof Int) {
-                bytes.set(low.bytes);
-            } else {
-                if (low.length !== 8)
-                    throw TypeError("Array must have exactly 8 elements.");
-                bytes.set(low);
-            }
-        } else {
-            throw TypeError('Int does not support your object for conversion');
+        if (check_not_in_range(high)) {
+            throw TypeError(`high not a 32-bit integer: ${high}`);
         }
 
-        this.buffer = buffer;
-        this.bytes = bytes;
-
-        this.eq = operation(function eq(b) {
-            const a = this;
-            return a.low() === b.low() && a.high() === b.high();
-        }, 1);
-
-        this.neg = operation(function neg() {
-            let type = this.constructor;
-
-            let low = ~this.low();
-            let high = ~this.high();
-
-            let res = (new Int(low, high)).add(1);
-
-            return new type(res);
-        }, 0);
-
-        this.add = operation(function add(b) {
-            let type = this.constructor;
-
-            let low = this.low();
-            let high = this.high();
-
-            low += b.low();
-            let carry = 0;
-            if (low > 0xffffffff) {
-                carry = 1;
-            }
-            high += carry + b.high();
-
-            low &= 0xffffffff;
-            high &= 0xffffffff;
-
-            return new type(low, high);
-        }, 1);
-
-        this.sub = operation(function sub(b) {
-            let type = this.constructor;
-
-            b = b.neg();
-
-            let low = this.low();
-            let high = this.high();
-
-            low += b.low();
-            let carry = 0;
-            if (low > 0xffffffff) {
-                carry = 1;
-            }
-            high += carry + b.high();
-
-            low &= 0xffffffff;
-            high &= 0xffffffff;
-
-            return new type(low, high);
-        }, 1);
+        this._u32 = new Uint32Array([low, high]);
     }
 
-    low() {
-        return this.buffer[0];
+    get lo() {
+        return this._u32[0];
     }
 
-    high() {
-        return this.buffer[1];
+    get hi() {
+        return this._u32[1];
     }
 
-    toString(is_pretty) {
+    // return low/high as signed integers
+
+    get bot() {
+        return this._u32[0] | 0;
+    }
+
+    get top() {
+        return this._u32[1] | 0;
+    }
+
+    neg() {
+        const u32 = this._u32;
+        const low = (~u32[0] >>> 0) + 1;
+        return new this.constructor(
+            low >>> 0,
+            ((~u32[1] >>> 0) + (low > 0xffffffff)) >>> 0,
+        );
+    }
+
+    eq(b) {
+        const values = lohi_from_one(b);
+        const u32 = this._u32;
+        return (
+            u32[0] === values[0]
+            && u32[1] === values[1]
+        );
+    }
+
+    ne(b) {
+        return !this.eq(b);
+    }
+
+    add(b) {
+        const values = lohi_from_one(b);
+        const u32 = this._u32;
+        const low = u32[0] + values[0];
+        return new this.constructor(
+            low >>> 0,
+            (u32[1] + values[1] + (low > 0xffffffff)) >>> 0,
+        );
+    }
+
+    sub(b) {
+        const values = lohi_from_one(b);
+        const u32 = this._u32;
+        const low = u32[0] + (~values[0] >>> 0) + 1;
+        return new this.constructor(
+            low >>> 0,
+            (u32[1] + (~values[1] >>> 0) + (low > 0xffffffff)) >>> 0,
+        );
+    }
+
+    toString(is_pretty=false) {
         if (!is_pretty) {
-            let low = this.low().toString(16).padStart(8, '0');
-            let high = this.high().toString(16).padStart(8, '0');
+            const low = this.lo.toString(16).padStart(8, '0');
+            const high = this.hi.toString(16).padStart(8, '0');
             return '0x' + high + low;
         }
-        let high = this.high().toString(16).padStart(8, '0');
+        let high = this.hi.toString(16).padStart(8, '0');
         high = high.substring(0, 4) + '_' + high.substring(4);
 
-        let low = this.low().toString(16).padStart(8, '0');
+        let low = this.lo.toString(16).padStart(8, '0');
         low = low.substring(0, 4) + '_' + low.substring(4);
+
         return '0x' + high + '_' + low;
     }
 }
-
-Int.Zero = new Int(0);
-Int.One = new Int(1);

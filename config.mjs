@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-2024 anonymous
+/* Copyright (C) 2023-2025 anonymous
 
 This file is part of PSFree.
 
@@ -22,82 +22,49 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 // can affect the size of SerializedScriptValue
 //
 // this target is no longer supported
+
+// target firmware format used by PSFree
 //
-//export const gtk_2_34_4 = 0;
+// 0xC_MM_mm
+//
+// * C console - PS4 (0) or PS5 (1) (1 bit)
+// * MM major version - integer part of the firmware version (8 bits)
+// * mm minor version - fractional part of the firmware version (8 bits)
+//
+// examples:
+// * PS4 10.00 -> C = 0 MM = 10 mm = 0 -> 0x0_10_00
+// * PS5 4.51 -> C = 1 MM = 4 mm = 51 -> 0x1_04_51
 
-// the original target platform was 8.03, this version confirmed works on ps4
-// 7.xx-8.xx
-export const ps4_8_03 = 1;
+// check if value is in Binary Coded Decimal format
+// assumes integer and is in the range [0, 0xffff]
+function check_bcd(value) {
+    for (let i = 0; i <= 12; i += 4) {
+        const nibble = (value >>> i) & 0xf;
 
-// this version for 9.xx
-export const ps4_9_00 = 2;
+        if (nibble > 9) {
+            return false;
+        }
+    }
 
-// version 9.xx is for ps5 1.xx-5.xx as well
-export const ps5_5_00 = ps4_9_00;
-
-// this version for 6.50-6.72
-export const ps4_6_50 = 3;
-
-// this version for 6.00-6.20
-export const ps4_6_00 = 4;
+    return true;
+}
 
 export function set_target(value) {
-    switch (value) {
-        case ps4_8_03:
-        case ps4_9_00:
-        case ps4_6_00:
-        case ps4_6_50: {
-            break;
-        }
-        default: {
-            throw RangeError('invalid target: ' + target);
-        }
+    if (!Number.isInteger(value)) {
+        throw TypeError(`value not an integer: ${value}`);
+    }
+
+    if (value >= 0x20000 || value < 0) {
+        throw RangeError(`value >= 0x20000 or value < 0: ${value}`);
+    }
+
+    const version = value & 0xffff;
+    if (!check_bcd(version)) {
+        throw RangeError(`value & 0xffff not in BCD format ${version}`);
     }
 
     target = value;
 }
 
-function DetectFirmwareVersion() //function by kameleon :)
-{
-    var UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 19, navigator.userAgent.indexOf(') Apple')).replace("PlayStation 4/","");
-    
-    if (UA == "6.00" || UA == "6.02" || UA == "6.10" || UA == "6.20")
-    {
-        return ps4_6_00;
-    }
-
-    if (UA == "6.50" || UA == "6.70" || UA == "6.71" || UA == "6.72")
-    {
-        return ps4_6_50;
-    }
-
-    if (UA == "7.01" || UA == "7.02" || UA == "7.50" || UA == "7.51" || UA == "7.55" || UA == "8.00" || UA == "8.01" || UA == "8.03")
-    {
-        return ps4_8_03;
-    }
-    
-    //on 9.00 Fw detection changed to laystation instead of regular Playstation
-    UA = navigator.userAgent.substring(navigator.userAgent.indexOf('5.0 (') + 19, navigator.userAgent.indexOf(') Apple')).replace("layStation 4/","");
-
-    if (UA == "8.50" || UA == "8.51")
-    {
-        return ps4_8_03;
-    }
-    if (UA == "9.00" || UA == "9.03" || UA == "9.04" || UA == "9.50" ||  UA == "9.51" || UA == "9.60")
-    {
-        return ps4_9_00;
-    }
-
-    //get user agent for PS5 (taken from PS5 Specter Exploit Host)
-    const supportedFirmwares = ["1.00","1.01","1.02","1.05","1.12","1.14","2.00","2.10","2.20","2.25","2.26","2.30","2.50","2.70","3.00","3.10","3.20","3.21","4.00", "4.02", "4.03", "4.50", "4.51","5.00","5.02","5.10","5.50"];
-    const fw_idx = navigator.userAgent.indexOf('PlayStation; PlayStation 5/') + 27;
-    const fw_str = navigator.userAgent.substring(fw_idx, fw_idx + 4);
-
-    if (supportedFirmwares.includes(fw_str)) 
-    {
-        return ps5_5_00;
-    }
-
-}
-
-export let target = DetectFirmwareVersion();
+export let target = null;
+set_target(0x900);

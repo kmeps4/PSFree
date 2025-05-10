@@ -1,4 +1,4 @@
-<!-- Copyright (C) 2023 anonymous
+<!-- Copyright (C) 2023-2025 anonymous
 
 This file is part of PSFree.
 
@@ -15,40 +15,27 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
-<script>
-    //function added By EchoSrech
-    var fwFromUA = parseFloat(navigator.userAgent.substring(navigator.userAgent.indexOf('PlayStation ') + 14, navigator.userAgent.indexOf(') Apple')));
-    
-    if (navigator.userAgent.includes('PlayStation 4')) {
-        if (fwFromUA >= 6.00 && fwFromUA <= 9.60) {
-            alert(`Current PS4 Firmware: ${fwFromUA.toFixed(2)}. Are You Ready?`);
-        } else {
-            alert(`Current PS4 Firmware ${fwFromUA.toFixed(2)} Is Not Supported`);
-            window.stop();
-        }
-    } else if (navigator.userAgent.includes('PlayStation 5')) {
-        if (fwFromUA >= 1.00 && fwFromUA <= 5.50) {
-            alert(`Current PS5 Firmware: ${fwFromUA.toFixed(2)}. Are You Ready?`);
-        } else {
-            alert(`Current PS5 Firmware ${fwFromUA.toFixed(2)} Is Not Supported`);
-            window.stop();
-        }
-    } else {
-        alert(`Current System Is Not Supported`);
-        window.stop();
-    }
-    </script>
-    <html>
-        <head>
-            <meta charset='utf-8'>
-            <title>PSFree 1.4.0 Beta 4</title>
-        </head>
-    
-        <body>
-            PS4/PS5 exploit using CVE-2022-22620<br>
-            PS4 versions vulnerable: 6.xx-9.xx (tested 6.00-9.60)<br>
-            PS5 versions vulnerable: 1.xx-5.xx (tested 1.00-5.50)<br>
-            <a href="./about.html" data-jslicense="1">JavaScript license information</a>
-        </body>
-        <script type='module' src='alert.mjs'></script>
-    </html>
+<html>
+    <head>
+        <meta charset='utf-8'>
+        <title>exploit</title>
+        <style>
+            @font-face {
+                font-family: 'logging';
+                src: url('fonts/LiberationMono-Regular.ttf');
+            }
+            #console {
+                font-family: 'logging';
+            }
+        </style>
+    </head>
+    <body>
+        PSFree: A PS4/PS5 Exploit Chain<br>
+        Donation (Monero/XMR):<br>
+        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS<br>
+        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
+        source code and license.<br>
+        <pre id='console'></pre>
+    </body>
+    <script type='module' src='alert.mjs'></script>
+</html>
