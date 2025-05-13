@@ -1,4 +1,4 @@
-TARGET = 80x
+TARGET = 900
 ENTRY = 0x900000000
 src = $(TARGET).c
 

