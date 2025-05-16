@@ -144,7 +144,7 @@ async function init() {
     await rop.init();
     chain = new Chain();
 
-// TODO assumes ps4 9.00
+// PS4 9.00
 const pthread_offsets = new Map(Object.entries({
     'pthread_create' : 0x25510,
     'pthread_join' : 0xafa0,
@@ -1240,7 +1240,7 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         die('test read of &"evf cv" failed');
     }
 
-    // TODO FW dependent parts! assume ps4 9.00 for now
+    // Only For PS4 9.00
 
     const off_kstr = 0x7f6f27;
     const kbase = kernel_addr.sub(off_kstr);
@@ -1496,7 +1496,7 @@ async function get_patches(url) {
     return response.arrayBuffer();
 }
 
-// TODO 9.00 supported only
+// 9.00 supported only
 async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     if (!is_ps4) {
         throw RangeError('PS5 kernel patching unsupported');
