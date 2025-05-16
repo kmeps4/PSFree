@@ -23,7 +23,6 @@ import { align } from './utils.mjs';
 import { page_size } from './offset.mjs';
 import { BufferView } from './rw.mjs';
 import { View1 } from './view.mjs';
-
 import * as off from './offset.mjs';
 
 // creates an ArrayBuffer whose contents is copied from addr

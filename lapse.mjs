@@ -24,21 +24,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 // * RESTORE - code will repair kernel panic vulnerability
 // * MEMLEAK - memory leaks that our code will induce
 
-import { Int } from '/module/int64.mjs';
-import { mem } from '/module/mem.mjs';
-import { log, die, hex, hexdump } from '/module/utils.mjs';
-import { cstr, jstr } from '/module/memtools.mjs';
-import { page_size, context_size } from '/module/offset.mjs';
-import { Chain } from '/module/chain.mjs';
+import { Int } from './module/int64.mjs';
+import { mem } from './module/mem.mjs';
+import { log, die, hex, hexdump } from './module/utils.mjs';
+import { cstr, jstr } from './module/memtools.mjs';
+import { page_size, context_size } from './module/offset.mjs';
+import { Chain } from './module/chain.mjs';
 
 import {
     View1, View2, View4,
     Word, Long, Pointer,
     Buffer,
-} from '/module/view.mjs';
+} from './module/view.mjs';
 
-import * as rop from '/module/chain.mjs';
-import * as config from '/config.mjs';
+import * as rop from './module/chain.mjs';
+import * as config from './config.mjs';
 
 const t1 = performance.now();
 
@@ -1523,7 +1523,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     // cr_sceCaps[1]
     kmem.write64(p_ucred.add(0x68), -1);
 
-    const buf = await get_patches('/kpatch/900.elf');
+    const buf = await get_patches('./kpatch/900.elf');
     // FIXME handle .bss segment properly
     // assume start of loadable segments is at offset 0x1000
     const patches = new View1(await buf, 0x1000);
@@ -1598,6 +1598,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
+    alert("kernel exploit succeeded!");
 }
 
 // FUNCTIONS FOR STAGE: SETUP

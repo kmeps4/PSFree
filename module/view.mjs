@@ -15,12 +15,12 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-import { Int, lohi_from_one } from '/module/int64.mjs';
-import { Addr } from '/module/mem.mjs';
-import { BufferView } from '/module/rw.mjs';
+import { Int, lohi_from_one } from './int64.mjs';
+import { Addr } from './mem.mjs';
+import { BufferView } from './rw.mjs';
 
-import * as config from '/config.mjs';
-import * as mt from '/module/memtools.mjs';
+import * as config from '../config.mjs';
+import * as mt from './memtools.mjs';
 
 // View constructors will always get the buffer property in order to make sure
 // that the JSArrayBufferView is a WastefulTypedArray. m_vector may change if

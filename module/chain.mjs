@@ -18,8 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 import { Int, lohi_from_one } from './int64.mjs';
 import { get_view_vector } from './memtools.mjs';
 import { Addr } from './mem.mjs';
-
-import * as config from '/config.mjs';
+import * as config from '../config.mjs';
 
 // put the sycall names that you want to use here
 export const syscall_map = new Map(Object.entries({
@@ -555,7 +554,7 @@ function load_fw_specific(version) {
     }
 
     if (0x800 <= value && value <= 0x900) {
-        return import('/rop/900.mjs');
+        return import('../rop/900.mjs');
     }
 
     throw RangeError('firmware not supported');
