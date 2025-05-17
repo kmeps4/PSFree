@@ -96,6 +96,9 @@ const CPU_LEVEL_WHICH = 3;
 const CPU_WHICH_TID = 1;
 
 // sys/mman.h
+const PROT_READ = 1;
+const PROT_WRITE = 2;
+const PROT_EXEC = 4;
 const MAP_SHARED = 1;
 const MAP_FIXED = 0x10;
 
@@ -1737,7 +1740,7 @@ export async function kexploit() {
 kexploit().then(() => {
     var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
     var payload_loader = new View4(window.pld);
-    chain.sys('mprotect', payload_loader.addr, payload_loader.size, (0x1 | 0x2 | 0x4));
+    chain.sys('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
     const ctx = new Buffer(0x10);
     const pthread = new Pointer();
     pthread.ctx = ctx;
