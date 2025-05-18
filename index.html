@@ -39,73 +39,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
             <div class="card">
                 <h2 class="card-title">Status</h2>
                 <div id="status-container">
-                    <p><span class="status-indicator status-waiting" id="status-icon"></span> <span id="status-text">Siap untuk memulai</span></p>
+                    <p><span class="status-indicator status-running" id="status-icon"></span> <span id="status-text">Menjalankan exploit...</span></p>
                     <div class="progress-container">
                         <div class="progress-bar" id="progress-bar"></div>
                     </div>
                 </div>
-                <div id="action-buttons">
-                    <button class="btn" id="run-exploit">Jalankan Exploit</button>
-                    <button class="btn btn-danger" id="reset-exploit" disabled>Reset</button>
-                </div>
+                <!-- Tombol jalankan exploit dan reset dihapus -->
             </div>
 
             <div class="tabs">
                 <div class="tab active" data-tab="console">Console</div>
-                <div class="tab" data-tab="payloads">Payloads</div>
-                <div class="tab" data-tab="settings">Pengaturan</div>
-                <div class="tab" data-tab="info">Info</div>
+                <!-- Tab payloads dan pengaturan dihapus -->
             </div>
 
             <div class="tab-content active" id="tab-console">
                 <pre id="console"></pre>
             </div>
 
-            <div class="tab-content" id="tab-payloads">
-                <h3>Pilih Payload</h3>
-                <div id="payload-list">
-                    <div class="payload-item selected" data-payload="payload.bin">
-                        <input type="radio" name="payload" id="payload-default" checked>
-                        <div class="payload-info">
-                            <label for="payload-default"><strong>Default Payload</strong></label>
-                            <p>Payload bawaan PSFree</p>
-                        </div>
-                    </div>
-                    <!-- Payload lain akan ditambahkan secara dinamis -->
-                </div>
-                <div style="margin-top: 15px;">
-                    <button class="btn" id="upload-payload">Upload Payload Kustom</button>
-                    <input type="file" id="payload-upload" style="display: none;">
-                </div>
-            </div>
+            <!-- Tab payloads dan pengaturan dihapus -->
 
-            <div class="tab-content" id="tab-settings">
-                <h3>Pengaturan</h3>
-                <div>
-                    <label>
-                        <input type="checkbox" id="auto-run">
-                        Jalankan exploit secara otomatis saat halaman dimuat
-                    </label>
-                </div>
-                <div style="margin-top: 10px;">
-                    <label>
-                        <input type="checkbox" id="verbose-logging">
-                        Mode logging verbose (lebih detail)
-                    </label>
-                </div>
-                <div style="margin-top: 10px;">
-                    <label>
-                        <input type="checkbox" id="safe-mode" checked>
-                        Mode aman (cek kompatibilitas sebelum menjalankan)
-                    </label>
-                </div>
-                <div style="margin-top: 15px;">
-                    <button class="btn" id="save-settings">Simpan Pengaturan</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="tab-info">
-                <h3>Tentang PSFree</h3>
+            <!-- Konten info dipindahkan ke bawah console -->
+            <div class="card" style="margin-top: 20px;">
+                <h2 class="card-title">Tentang PSFree</h2>
                 <p>PSFree adalah exploit chain untuk PS4 dan PS5.</p>
                 <p>Versi saat ini: <strong>1.5.0</strong></p>
                 <p>Firmware yang didukung:</p>
@@ -126,12 +81,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
             <div class="card" style="margin-top: 20px;">
                 <h2 class="card-title">Panduan Cepat</h2>
                 <ol>
-                    <li>Pilih payload yang ingin digunakan (opsional)</li>
-                    <li>Klik tombol "Jalankan Exploit"</li>
+                    <li>Buka halaman ini di browser PS4</li>
+                    <li>Exploit akan berjalan secara otomatis</li>
                     <li>Tunggu hingga proses selesai</li>
                     <li>Jika berhasil, payload akan dijalankan secara otomatis</li>
                 </ol>
-                <p><strong>Catatan:</strong> Jika terjadi Kernel Panic, restart konsol dan coba lagi.</p>
+                <p><strong>Catatan:</strong> Jika terjadi Kernel Panic, matikan konsol (bukan restart) dan coba lagi.</p>
+                <p><strong>Penting:</strong> Website ini menggunakan payload default yang ada di root folder.</p>
             </div>
         </div>
 

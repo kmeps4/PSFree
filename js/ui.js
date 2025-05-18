@@ -14,12 +14,12 @@ const STATUS = {
 
 // Global state
 let state = {
-    status: STATUS.WAITING,
+    status: STATUS.RUNNING, // Diubah dari WAITING ke RUNNING karena otomatis berjalan
     progress: 0,
-    selectedPayload: 'payload.bin',
+    selectedPayload: 'payload.bin', // Selalu menggunakan payload default
     customPayloads: [],
     settings: {
-        autoRun: false,
+        autoRun: true, // Diubah menjadi true untuk auto-run
         verboseLogging: false,
         safeMode: true
     },
@@ -29,6 +29,8 @@ let state = {
         focusableElements: []
     }
 };
+
+// TODO: Exploit akan otomatis berjalan saat halaman dimuat
 
 // Original console.log function
 const originalLog = console.log;
@@ -72,10 +74,8 @@ function updateStatus(status, message) {
 
     const statusIcon = document.getElementById('status-icon');
     const statusText = document.getElementById('status-text');
-    const runButton = document.getElementById('run-exploit');
-    const resetButton = document.getElementById('reset-exploit');
 
-    if (!statusIcon || !statusText || !runButton || !resetButton) return;
+    if (!statusIcon || !statusText) return;
 
     // Remove all status classes
     statusIcon.classList.remove('status-waiting', 'status-running', 'status-success', 'status-error');
@@ -86,17 +86,7 @@ function updateStatus(status, message) {
     // Update the status text
     statusText.textContent = message;
 
-    // Enable/disable buttons based on status
-    if (status === STATUS.RUNNING) {
-        runButton.disabled = true;
-        resetButton.disabled = true;
-    } else if (status === STATUS.SUCCESS || status === STATUS.ERROR) {
-        runButton.disabled = true;
-        resetButton.disabled = false;
-    } else {
-        runButton.disabled = false;
-        resetButton.disabled = true;
-    }
+    // TODO: Tombol jalankan exploit dan reset telah dihapus
 }
 
 // Function to update the progress bar
@@ -396,124 +386,14 @@ function handleControllerNavigation(event) {
 
 // Setup event listeners
 function setupEventListeners() {
-    // Run exploit button
-    const runButton = document.getElementById('run-exploit');
-    if (runButton) {
-        runButton.addEventListener('click', () => {
-            if (state.settings.safeMode) {
-                const { isCompatible, message } = checkCompatibility();
-                if (!isCompatible) {
-                    if (!confirm(`${message}. Tetap lanjutkan?`)) {
-                        return;
-                    }
-                }
-            }
-            runExploit();
-        });
-    }
-
-    // Reset exploit button
-    const resetButton = document.getElementById('reset-exploit');
-    if (resetButton) {
-        resetButton.addEventListener('click', resetExploit);
-    }
-
-    // Tab switching
+    // Tab switching - hanya untuk tab console
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
             switchTab(tab.dataset.tab);
         });
     });
 
-    // Upload payload button
-    const uploadButton = document.getElementById('upload-payload');
-    const payloadUpload = document.getElementById('payload-upload');
-    if (uploadButton && payloadUpload) {
-        uploadButton.addEventListener('click', () => {
-            payloadUpload.click();
-        });
-
-        payloadUpload.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const fileName = file.name;
-                    const fileData = e.target.result;
-
-                    // Add the custom payload
-                    addCustomPayload(fileName, fileData);
-
-                    // Reset the file input
-                    payloadUpload.value = '';
-                };
-                reader.readAsArrayBuffer(file);
-            }
-        });
-    }
-
-    // Payload selection
-    const payloadList = document.getElementById('payload-list');
-    if (payloadList) {
-        payloadList.addEventListener('click', (event) => {
-            const payloadItem = event.target.closest('.payload-item');
-            if (payloadItem) {
-                // If clicking on the radio button or label
-                if (event.target.type === 'radio' || event.target.tagName === 'LABEL') {
-                    // Remove selected class from all items
-                    document.querySelectorAll('.payload-item').forEach(item => {
-                        item.classList.remove('selected');
-                    });
-
-                    // Add selected class to the clicked item
-                    payloadItem.classList.add('selected');
-
-                    // Update the selected payload
-                    state.selectedPayload = payloadItem.dataset.payload;
-                    console.log(`Payload dipilih: ${state.selectedPayload}`);
-
-                    // Update the global payload if using the payload manager
-                    if (window.payloadManager && typeof window.payloadManager.selectPayload === 'function') {
-                        window.payloadManager.selectPayload(state.selectedPayload);
-                    }
-                }
-
-                // If clicking on the remove button
-                if (event.target.classList.contains('remove-payload')) {
-                    const payloadName = event.target.dataset.name;
-
-                    // Remove the payload from the list
-                    payloadItem.remove();
-
-                    // Remove the payload from the state
-                    state.customPayloads = state.customPayloads.filter(p => p.name !== payloadName);
-
-                    // Save to localStorage
-                    saveCustomPayloads();
-
-                    console.log(`Payload dihapus: ${payloadName}`);
-                }
-            }
-        });
-    }
-
-    // Save settings button
-    const saveSettingsButton = document.getElementById('save-settings');
-    if (saveSettingsButton) {
-        saveSettingsButton.addEventListener('click', () => {
-            // Update settings from UI
-            const autoRunElement = document.getElementById('auto-run');
-            const verboseLoggingElement = document.getElementById('verbose-logging');
-            const safeModeElement = document.getElementById('safe-mode');
-
-            if (autoRunElement) state.settings.autoRun = autoRunElement.checked;
-            if (verboseLoggingElement) state.settings.verboseLogging = verboseLoggingElement.checked;
-            if (safeModeElement) state.settings.safeMode = safeModeElement.checked;
-
-            // Save settings
-            saveSettings();
-        });
-    }
+    // TODO: Tombol jalankan exploit, reset, upload payload, dan pengaturan telah dihapus
 
     // Controller navigation
     document.addEventListener('keydown', handleControllerNavigation);
@@ -554,21 +434,15 @@ function initUI() {
     // Update focusable elements for controller navigation
     updateFocusableElements();
 
-    // Auto-run if enabled
-    if (state.settings.autoRun) {
-        setTimeout(() => {
-            if (state.settings.safeMode) {
-                const { isCompatible } = checkCompatibility();
-                if (isCompatible) {
-                    runExploit();
-                }
-            } else {
-                runExploit();
-            }
-        }, 1000);
-    }
+    // Selalu jalankan exploit secara otomatis
+    setTimeout(() => {
+        console.log('Menjalankan exploit secara otomatis...');
+        runExploit();
+    }, 1000);
 
-    console.log('UI initialized. Ready to start.');
+    console.log('UI initialized. Exploit akan berjalan otomatis.');
+
+    // TODO: Exploit akan selalu berjalan otomatis tanpa kondisi
 }
 
 // Initialize when the DOM is fully loaded
