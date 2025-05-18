@@ -22,8 +22,8 @@ Credits:
 - CTN https://github.com/ctn123
 - Al-Azif https://github.com/al-azif
 - abc for PSFree webkit exploit & Lapse kernel Exploit
-- Chendochap
-- https://github.com/ChendoChap
+- Chendochap https://github.com/ChendoChap
+- kameleonre.. for porting and chaining psfree + lapse on ps4 9.00 :P
 
 PSFree is a collection of exploits for the PS4 console. The main focus of the 
 repo is for the PS4 but we try to make things portable to PS5.
