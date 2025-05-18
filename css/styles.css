@@ -1,0 +1,242 @@
+/* 
+ * PSFree Enhanced UI Styles
+ * Compatible with PS4 FW 9.00 Browser
+ * TODO: Optimize for PS4 display and controller navigation
+ */
+
+body {
+    font-family: 'Liberation Mono', monospace;
+    margin: 0;
+    padding: 20px;
+    background-color: #0d1117;
+    color: #e6edf3;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #30363d;
+}
+
+.header h1 {
+    margin: 0;
+    color: #58a6ff;
+}
+
+.header p {
+    margin: 5px 0;
+    color: #8b949e;
+}
+
+.card {
+    background-color: #161b22;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid #30363d;
+}
+
+.card-title {
+    margin-top: 0;
+    color: #58a6ff;
+    border-bottom: 1px solid #30363d;
+    padding-bottom: 10px;
+}
+
+.btn {
+    background-color: #238636;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.btn:hover {
+    background-color: #2ea043;
+}
+
+.btn:disabled {
+    background-color: #3c4043;
+    cursor: not-allowed;
+}
+
+.btn-danger {
+    background-color: #da3633;
+}
+
+.btn-danger:hover {
+    background-color: #f85149;
+}
+
+.progress-container {
+    width: 100%;
+    background-color: #30363d;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+.progress-bar {
+    height: 10px;
+    background-color: #238636;
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s;
+}
+
+#console {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px;
+    height: 300px;
+    overflow-y: auto;
+    font-family: 'Liberation Mono', monospace;
+    white-space: pre-wrap;
+    color: #e6edf3;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-waiting {
+    background-color: #8b949e;
+}
+
+.status-running {
+    background-color: #f0883e;
+}
+
+.status-success {
+    background-color: #56d364;
+}
+
+.status-error {
+    background-color: #f85149;
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    margin-right: 5px;
+}
+
+.tab.active {
+    background-color: #0d1117;
+    border-bottom: 1px solid #0d1117;
+    position: relative;
+    top: 1px;
+}
+
+.tab-content {
+    display: none;
+    padding: 15px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 0 6px 6px 6px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.payload-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.payload-item.selected {
+    border-color: #58a6ff;
+    background-color: rgba(88, 166, 255, 0.1);
+}
+
+.payload-info {
+    flex-grow: 1;
+    margin-left: 10px;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #30363d;
+    color: #e6edf3;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* PS4 specific optimizations */
+@media screen and (max-width: 1920px) and (max-height: 1080px) {
+    .container {
+        max-width: 1600px;
+    }
+    
+    #console {
+        height: 400px;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        font-size: 18px;
+    }
+    
+    .tab {
+        padding: 12px 24px;
+        font-size: 18px;
+    }
+}
+
+/* Focus styles for controller navigation */
+.btn:focus, .tab:focus, .payload-item:focus {
+    outline: 3px solid #58a6ff;
+}
+
+/* Highlight the currently focused element for controller navigation */
+.controller-focus {
+    outline: 3px solid #58a6ff !important;
+    box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+}

@@ -15,28 +15,159 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+<!DOCTYPE html>
 <html>
     <head>
-        <meta charset='utf-8'>
-        <title>PSFree-Lapse Exploit For 9.00</title>
+        <meta charset="utf-8">
+        <title>PSFree v1.5.0 - PS4/PS5 Exploit</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="css/styles.css">
         <style>
             @font-face {
-                font-family: 'logging';
+                font-family: 'Liberation Mono';
                 src: url('fonts/LiberationMono-Regular.ttf');
-            }
-            #console {
-                font-family: 'logging';
             }
         </style>
     </head>
     <body>
-        PSFree: A PS4/PS5 Exploit Chain<br>
-        Donation (Monero/XMR):<br>
-        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS<br>
-        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
-        source code and license.<br>
-        <pre id='console'></pre>
+        <div class="container">
+            <div class="header">
+                <h1>PSFree v1.5.0</h1>
+                <p>PS4/PS5 Exploit Chain</p>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Status</h2>
+                <div id="status-container">
+                    <p><span class="status-indicator status-waiting" id="status-icon"></span> <span id="status-text">Siap untuk memulai</span></p>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                </div>
+                <div id="action-buttons">
+                    <button class="btn" id="run-exploit">Jalankan Exploit</button>
+                    <button class="btn btn-danger" id="reset-exploit" disabled>Reset</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" data-tab="console">Console</div>
+                <div class="tab" data-tab="payloads">Payloads</div>
+                <div class="tab" data-tab="settings">Pengaturan</div>
+                <div class="tab" data-tab="info">Info</div>
+            </div>
+
+            <div class="tab-content active" id="tab-console">
+                <pre id="console"></pre>
+            </div>
+
+            <div class="tab-content" id="tab-payloads">
+                <h3>Pilih Payload</h3>
+                <div id="payload-list">
+                    <div class="payload-item selected" data-payload="payload.bin">
+                        <input type="radio" name="payload" id="payload-default" checked>
+                        <div class="payload-info">
+                            <label for="payload-default"><strong>Default Payload</strong></label>
+                            <p>Payload bawaan PSFree</p>
+                        </div>
+                    </div>
+                    <!-- Payload lain akan ditambahkan secara dinamis -->
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn" id="upload-payload">Upload Payload Kustom</button>
+                    <input type="file" id="payload-upload" style="display: none;">
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-settings">
+                <h3>Pengaturan</h3>
+                <div>
+                    <label>
+                        <input type="checkbox" id="auto-run">
+                        Jalankan exploit secara otomatis saat halaman dimuat
+                    </label>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label>
+                        <input type="checkbox" id="verbose-logging">
+                        Mode logging verbose (lebih detail)
+                    </label>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label>
+                        <input type="checkbox" id="safe-mode" checked>
+                        Mode aman (cek kompatibilitas sebelum menjalankan)
+                    </label>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn" id="save-settings">Simpan Pengaturan</button>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-info">
+                <h3>Tentang PSFree</h3>
+                <p>PSFree adalah exploit chain untuk PS4 dan PS5.</p>
+                <p>Versi saat ini: <strong>1.5.0</strong></p>
+                <p>Firmware yang didukung:</p>
+                <ul>
+                    <li>PS4: 5.00 - 12.50</li>
+                    <li>PS5: 1.00 - 10.20</li>
+                </ul>
+                <p>PSFree menggunakan:</p>
+                <ul>
+                    <li>WebKit exploit (CVE-2022-22620)</li>
+                    <li>Lapse kernel exploit</li>
+                </ul>
+                <p>Lihat <a href="./about.html" data-jslicense="1">informasi lisensi JavaScript</a> untuk kode sumber dan lisensi.</p>
+                <p>Donasi (Monero/XMR):<br>
+                86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS</p>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2 class="card-title">Panduan Cepat</h2>
+                <ol>
+                    <li>Pilih payload yang ingin digunakan (opsional)</li>
+                    <li>Klik tombol "Jalankan Exploit"</li>
+                    <li>Tunggu hingga proses selesai</li>
+                    <li>Jika berhasil, payload akan dijalankan secara otomatis</li>
+                </ol>
+                <p><strong>Catatan:</strong> Jika terjadi Kernel Panic, restart konsol dan coba lagi.</p>
+            </div>
+        </div>
+
+        <script src="js/remote-logger.js"></script>
+        <script src="js/payload-manager.js"></script>
+        <script src="js/ui.js"></script>
+        <script src="payload.js"></script>
+        <script>
+            // Inisialisasi Remote Logger
+            document.addEventListener('DOMContentLoaded', function() {
+                // Coba dapatkan IP server dari URL parameter
+                const urlParams = new URLSearchParams(window.location.search);
+                const serverIp = urlParams.get('server');
+
+                // Konfigurasi logger
+                const loggerConfig = {
+                    enabled: true,
+                    localConsole: true
+                };
+
+                // Jika ada parameter server, gunakan itu
+                if (serverIp) {
+                    loggerConfig.serverUrl = `http://${serverIp}:3000`;
+                }
+
+                // Inisialisasi logger
+                window.RemoteLogger.init(loggerConfig);
+
+                // Log informasi browser
+                window.RemoteLogger.info('PSFree initialized', {
+                    userAgent: navigator.userAgent,
+                    url: window.location.href,
+                    timestamp: new Date().toISOString()
+                });
+            });
+        </script>
+        <script type="module" src="./alert.mjs"></script>
     </body>
-    <script src="payload.js"></script>
-    <script type='module' src='./alert.mjs'></script>
 </html>
