@@ -4,9 +4,15 @@ Lapse Kex ported to 9.00 - WIP
 
 Very fast and reliable but can KP :P
 
+"Please note that this project is still in the beta phase, with stability at approximately 50%. If the exploit encounters an error, please restart the console and try again. Use this exploit at your own risk."
+
+
+
 TODO:
 - Some performance Tweaks??.
-- Payload Loader will look for payload.bin provided on this repo, you can swap it with another payload.
+
+
+Payload Loader will look for payload.bin provided on this repo, you can swap it with another payload.
   
 PR are welcome!!!
 
@@ -16,6 +22,8 @@ Credits:
 - CTN https://github.com/ctn123
 - Al-Azif https://github.com/al-azif
 - abc for PSFree webkit exploit & Lapse kernel Exploit
+- Chendochap
+- https://github.com/ChendoChap
 
 PSFree is a collection of exploits for the PS4 console. The main focus of the 
 repo is for the PS4 but we try to make things portable to PS5.
