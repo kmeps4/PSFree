@@ -1,42 +1,148 @@
-<!-- Copyright (C) 2023-2025 anonymous
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PSFree Exploit for PS4/PS5</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @font-face {
+            font-family: 'logging';
+            src: url('fonts/LiberationMono-Regular.ttf');
+        }
 
-This file is part of PSFree.
+        body {
+            background-color: #121212;
+            color: #00ff88;
+            font-family: 'logging', monospace;
+            margin: 0;
+            padding: 20px;
+        }
 
-PSFree is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
+        h1 {
+            color: #00e6e6;
+        }
 
-PSFree is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px #00ff88;
+        }
 
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
--->
-<html>
-    <head>
-        <meta charset='utf-8'>
-        <title>PSFree-Lapse Exploit For 9.00</title>
-        <style>
-            @font-face {
-                font-family: 'logging';
-                src: url('fonts/LiberationMono-Regular.ttf');
-            }
-            #console {
-                font-family: 'logging';
-            }
-        </style>
-    </head>
-    <body>
-        PSFree: A PS4/PS5 Exploit Chain<br>
-        Donation (Monero/XMR):<br>
-        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS<br>
-        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
-        source code and license.<br>
-        <pre id='console'></pre>
-    </body>
-    <script src="payload.js"></script>
-    <script type='module' src='./alert.mjs'></script>
+        .console {
+            background-color: black;
+            padding: 10px;
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+
+        a {
+            color: #00bfff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .note {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .arabic {
+            direction: rtl;
+            text-align: right;
+            color: #dddddd;
+            margin-top: 20px;
+        }
+
+        #loader {
+            display: none;
+            border: 5px solid #333;
+            border-top: 5px solid #00ff88;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #startButton {
+            display: inline-block;
+            background-color: #00ff88;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        #startButton:hover {
+            background-color: #00cc66;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 PSFree Exploit for PS4/PS5</h1>
+        <p><strong>Version:</strong> Lapse Exploit for 9.00</p>
+        <p><strong>Donation (XMR):</strong><br>
+        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS</p>
+
+        <p>📜 See <a href="./about.html" data-jslicense="1">JavaScript license information</a>.</p>
+
+        <button id="startButton">تشغيل الاستغلال</button>
+        <div id="loader"></div>
+        <div id="console" class="console">[+] في انتظار بدء الاستغلال...</div>
+
+        <div class="arabic">
+            <strong>شرح:</strong><br>
+            اضغط على زر "تشغيل الاستغلال" لبدء تحميل الحمولة وتشغيل الكود.
+        </div>
+
+        <p class="note">© Modified by [اسمك]</p>
+    </div>
+
+    <script>
+        const button = document.getElementById('startButton');
+        const loader = document.getElementById('loader');
+        const consoleOutput = document.getElementById('console');
+
+        button.addEventListener('click', () => {
+            consoleOutput.textContent += '\n[+] جاري تشغيل الاستغلال...';
+            loader.style.display = 'block';
+            button.disabled = true;
+            button.textContent = "جاري التنفيذ...";
+
+            setTimeout(() => {
+                // تحميل سكربتات الاستغلال عند الطلب فقط
+                const script1 = document.createElement('script');
+                script1.src = 'payload.js';
+                document.body.appendChild(script1);
+
+                const script2 = document.createElement('script');
+                script2.type = 'module';
+                script2.src = './alert.mjs';
+                document.body.appendChild(script2);
+
+                consoleOutput.textContent += '\n[+] تم تحميل السكربتات.';
+                loader.style.display = 'none';
+                button.textContent = "تم التشغيل";
+            }, 1500); // تأخير بسيط لمحاكاة التحميل
+        });
+    </script>
+</body>
 </html>
