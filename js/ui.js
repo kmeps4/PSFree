@@ -281,8 +281,42 @@ function runExploit() {
 
     console.log('Memulai PSFree exploit...');
 
-    // The actual exploit will be triggered here via the import of lapse.mjs
-    // This is handled by the original code in index.html
+    // Pastikan payload sudah dimuat
+    if (!window.pld) {
+        console.error('Payload belum dimuat. Silakan pilih payload terlebih dahulu.');
+        updateStatus(STATUS.ERROR, 'Payload belum dimuat. Silakan pilih payload terlebih dahulu.');
+        return;
+    }
+
+    // Tampilkan informasi payload yang digunakan
+    console.log(`Menggunakan payload: ${state.selectedPayload}`);
+
+    // Muat dan jalankan exploit secara dinamis
+    const script = document.createElement('script');
+    script.type = 'module';
+
+    // Tambahkan event listener untuk menangani error
+    script.onerror = function() {
+        console.error('Gagal memuat exploit script.');
+        updateStatus(STATUS.ERROR, 'Gagal memuat exploit script.');
+    };
+
+    // Tambahkan script ke halaman
+    // Muat psfree.mjs terlebih dahulu, yang kemudian akan memuat lapse.mjs
+    script.src = './psfree.mjs';
+
+    // Tambahkan event listener untuk menjalankan exploit setelah script dimuat
+    script.onload = function() {
+        if (typeof window.runPSFreeExploit === 'function') {
+            console.log('Menjalankan PSFree exploit...');
+            window.runPSFreeExploit();
+        } else {
+            console.error('Fungsi runPSFreeExploit tidak ditemukan');
+            updateStatus(STATUS.ERROR, 'Fungsi runPSFreeExploit tidak ditemukan');
+        }
+    };
+
+    document.body.appendChild(script);
 
     // Listen for exploit progress events
     document.addEventListener('exploitProgress', function(event) {
@@ -294,6 +328,9 @@ function runExploit() {
         updateStatus(event.detail.status, event.detail.message);
     });
 }
+
+// Ekspos fungsi runExploit ke window agar dapat diakses oleh PayloadSelector
+window.runExploit = runExploit;
 
 // Function to reset the exploit
 function resetExploit() {
@@ -310,6 +347,54 @@ function resetExploit() {
     if (confirm('Halaman akan dimuat ulang untuk mereset exploit. Lanjutkan?')) {
         window.location.reload();
     }
+}
+
+// Function to update payload information on the page
+function updatePayloadInfo(name, size) {
+    // Cek apakah elemen info payload sudah ada
+    let payloadInfoElement = document.getElementById('payload-info');
+
+    // Jika belum ada, buat elemen baru
+    if (!payloadInfoElement) {
+        // Buat container untuk info payload
+        payloadInfoElement = document.createElement('div');
+        payloadInfoElement.id = 'payload-info';
+        payloadInfoElement.className = 'payload-info-container';
+        payloadInfoElement.style.margin = '10px 0';
+        payloadInfoElement.style.padding = '10px';
+        payloadInfoElement.style.backgroundColor = '#161b22';
+        payloadInfoElement.style.borderRadius = '5px';
+        payloadInfoElement.style.border = '1px solid #30363d';
+
+        // Cari tempat yang tepat untuk menambahkan info payload
+        const targetElement = document.querySelector('.payload-selector-container') ||
+                             document.querySelector('.status-container') ||
+                             document.querySelector('.card');
+
+        if (targetElement) {
+            targetElement.parentNode.insertBefore(payloadInfoElement, targetElement.nextSibling);
+        } else {
+            // Jika tidak ada elemen target, tambahkan ke body
+            document.body.appendChild(payloadInfoElement);
+        }
+    }
+
+    // Format nama payload untuk ditampilkan
+    let displayName = name;
+    if (name.includes('/')) {
+        displayName = name.split('/').pop();
+    }
+
+    // Format ukuran payload
+    const formattedSize = formatBytes(size);
+
+    // Update konten info payload
+    payloadInfoElement.innerHTML = `
+        <h3 style="margin-top: 0; color: #58a6ff;">Informasi Payload</h3>
+        <p><strong>Nama:</strong> ${displayName}</p>
+        <p><strong>Ukuran:</strong> ${formattedSize}</p>
+        <p><strong>Status:</strong> Dimuat dan siap digunakan</p>
+    `;
 }
 
 // Function to update focusable elements for controller navigation
@@ -409,7 +494,23 @@ function setupEventListeners() {
 
     // Payload events
     document.addEventListener('payloadLoaded', function(event) {
+        // Update state dengan payload yang dipilih
+        state.selectedPayload = event.detail.name;
+
+        // Log informasi payload
         console.log(`Payload dimuat: ${event.detail.name} (${formatBytes(event.detail.size)})`);
+
+        // Update status dengan informasi payload
+        const statusText = document.getElementById('status-text');
+        if (statusText) {
+            const currentText = statusText.textContent;
+            if (currentText.includes('Menjalankan exploit')) {
+                statusText.textContent = `${currentText} dengan payload ${event.detail.name}`;
+            }
+        }
+
+        // Tambahkan informasi payload ke halaman
+        updatePayloadInfo(event.detail.name, event.detail.size);
     });
 
     document.addEventListener('payloadError', function(event) {
@@ -434,15 +535,15 @@ function initUI() {
     // Update focusable elements for controller navigation
     updateFocusableElements();
 
-    // Selalu jalankan exploit secara otomatis
-    setTimeout(() => {
-        console.log('Menjalankan exploit secara otomatis...');
-        runExploit();
-    }, 1000);
+    // Tidak lagi menjalankan exploit secara otomatis
+    // Exploit akan dijalankan setelah pengguna memilih payload
 
-    console.log('UI initialized. Exploit akan berjalan otomatis.');
+    console.log('UI initialized. Silakan pilih payload untuk menjalankan exploit.');
 
-    // TODO: Exploit akan selalu berjalan otomatis tanpa kondisi
+    // Tampilkan pesan untuk memilih payload
+    updateStatus(STATUS.WAITING, 'Silakan pilih payload untuk memulai exploit');
+
+    // TODO: Exploit akan dijalankan setelah pengguna memilih payload
 }
 
 // Initialize when the DOM is fully loaded

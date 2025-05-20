@@ -1,0 +1,13 @@
+# Dependensi
+node_modules/
+
+# Log
+logs/
+*.log
+
+# Environment
+.env
+
+# Lainnya
+.DS_Store
+Thumbs.db

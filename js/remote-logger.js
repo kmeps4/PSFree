@@ -48,13 +48,18 @@ const RemoteLogger = {
         // Gabungkan konfigurasi default dengan konfigurasi kustom
         this.config = { ...this.config, ...customConfig };
 
+        // Tampilkan pesan di konsol
+        console.log("Inisialisasi Remote Logger...");
+        console.log(`Server URL: ${this.config.serverUrl}`);
+        console.log(`Session ID: ${this.config.sessionId}`);
+
         // Coba deteksi IP server secara otomatis jika tidak diatur
         if (this.config.serverUrl === 'http://192.168.1.100:3000') {
             this.autoDetectServerIp();
+        } else {
+            // Kirim informasi sesi ke server
+            this.sendSessionInfo();
         }
-
-        // Kirim informasi sesi ke server
-        this.sendSessionInfo();
 
         // Override fungsi console.log asli
         this.overrideConsoleLog();
@@ -68,13 +73,57 @@ const RemoteLogger = {
             }
         });
 
+        // Tambahkan informasi ke UI
+        this.addServerInfoToUI();
+
         return this;
+    },
+
+    // Tambahkan informasi server ke UI
+    addServerInfoToUI: function() {
+        try {
+            // Buat elemen untuk menampilkan informasi server
+            const serverInfoDiv = document.createElement('div');
+            serverInfoDiv.className = 'server-info';
+            serverInfoDiv.style.position = 'fixed';
+            serverInfoDiv.style.bottom = '10px';
+            serverInfoDiv.style.right = '10px';
+            serverInfoDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+            serverInfoDiv.style.padding = '5px 10px';
+            serverInfoDiv.style.borderRadius = '5px';
+            serverInfoDiv.style.fontSize = '12px';
+            serverInfoDiv.style.color = '#333';
+            serverInfoDiv.style.zIndex = '9999';
+
+            // Tambahkan informasi server
+            serverInfoDiv.innerHTML = `
+                <div>Logger Server: ${this.config.serverUrl}</div>
+                <div>Session ID: ${this.config.sessionId}</div>
+                <div>Status: <span id="server-status">${this.config.connected ? 'Connected' : 'Disconnected'}</span></div>
+            `;
+
+            // Tambahkan ke body
+            document.body.appendChild(serverInfoDiv);
+
+            // Update status setiap 5 detik
+            setInterval(() => {
+                const statusElement = document.getElementById('server-status');
+                if (statusElement) {
+                    statusElement.textContent = this.config.connected ? 'Connected' : 'Disconnected';
+                    statusElement.style.color = this.config.connected ? 'green' : 'red';
+                }
+            }, 5000);
+        } catch (e) {
+            console.error('Error adding server info to UI:', e);
+        }
     },
 
     // Coba deteksi IP server secara otomatis
     autoDetectServerIp: function() {
         // Daftar IP yang umum digunakan dalam jaringan lokal
         const commonIps = [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
             'http://192.168.1.100:3000',
             'http://192.168.1.101:3000',
             'http://192.168.1.102:3000',
@@ -92,26 +141,46 @@ const RemoteLogger = {
             'http://10.0.0.102:3000'
         ];
 
+        // Tampilkan pesan di konsol
+        console.log("Mencoba mendeteksi server logging...");
+
         // Coba ping setiap IP untuk menemukan server yang aktif
+        let foundServer = false;
+        let pingPromises = [];
+
         for (const ip of commonIps) {
-            fetch(`${ip}/ping`, {
+            const pingPromise = fetch(`${ip}/ping`, {
                 method: 'GET',
                 mode: 'no-cors',
                 cache: 'no-cache',
                 headers: {
                     'Content-Type': 'application/json'
-                },
-                timeout: 500
+                }
             })
             .then(() => {
-                // Jika berhasil, gunakan IP ini
-                this.config.serverUrl = ip;
-                this.info(`Server ditemukan di ${ip}`);
+                if (!foundServer) {
+                    foundServer = true;
+                    this.config.serverUrl = ip;
+                    this.config.connected = true;
+                    console.log(`Server logging ditemukan di ${ip}`);
+
+                    // Kirim informasi sesi ke server
+                    this.sendSessionInfo();
+                }
             })
             .catch(() => {
-                // Jika gagal, coba IP berikutnya
+                // Jika gagal, abaikan
             });
+
+            pingPromises.push(pingPromise);
         }
+
+        // Tunggu semua ping selesai
+        Promise.all(pingPromises).then(() => {
+            if (!foundServer) {
+                console.log("Tidak dapat menemukan server logging. Gunakan parameter URL ?server=IP_ADDRESS untuk menentukan server.");
+            }
+        });
     },
 
     // Kirim informasi sesi ke server

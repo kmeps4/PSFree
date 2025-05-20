@@ -1,0 +1,57 @@
+CACHE MANIFEST
+# PSFree Offline Cache v1.0.4
+# Timestamp: 2023-11-04
+
+CACHE:
+# HTML files
+./index.html
+./about.html
+./offline.html
+./cache.html
+./bin/index.html
+
+# CSS files
+./css/styles.css
+
+# JavaScript files
+./js/ui.js
+./js/remote-logger.js
+./js/payload-manager.js
+./js/payload-selector.js
+./payload.js
+./psfree.mjs
+./lapse.mjs
+./config.mjs
+./alert.mjs
+./module/int64.mjs
+./module/mem.mjs
+./module/offset.mjs
+./module/rw.mjs
+./module/utils.mjs
+./module/chain.mjs
+./module/memtools.mjs
+./module/view.mjs
+./rop/900.mjs
+./rop/800.mjs
+./scripts/lapse.mjs
+
+# Fonts
+./fonts/LiberationMono-Regular.ttf
+
+# Payload
+./payload.bin
+./bin/goldhen_2.3_900.bin
+./bin/ps4debug_900.bin
+./bin/ftps4_900.bin
+
+# Images
+./favicon.ico
+
+# Tambahan file yang mungkin diperlukan
+./COPYING
+
+NETWORK:
+*
+
+FALLBACK:
+/ ./offline.html

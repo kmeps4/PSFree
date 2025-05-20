@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSFree Logger</title>
+    <style>
+        /* Tema terang dengan kontras tinggi */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #212529;
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        header h1 {
+            margin: 0;
+            padding: 0 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            padding: 20px;
+        }
+        
+        .card-title {
+            margin-top: 0;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+            color: #007bff;
+        }
+        
+        .session-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .session-item {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            cursor: pointer;
+        }
+        
+        .session-item:hover {
+            background-color: #f1f3f5;
+        }
+        
+        .session-item.active {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        
+        .log-container {
+            height: 500px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .log-DEBUG {
+            color: #6c757d;
+        }
+        
+        .log-INFO {
+            color: #0d6efd;
+        }
+        
+        .log-WARN {
+            color: #fd7e14;
+            background-color: #fff3cd;
+        }
+        
+        .log-ERROR {
+            color: #dc3545;
+            background-color: #f8d7da;
+        }
+        
+        .refresh-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .refresh-btn:hover {
+            background-color: #0069d9;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-active {
+            background-color: #28a745;
+        }
+        
+        .status-inactive {
+            background-color: #dc3545;
+        }
+        
+        .device-info {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .timestamp {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        
+        .no-sessions {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+        
+        .auto-refresh {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>PSFree Logger</h1>
+    </header>
+    
+    <div class="container">
+        <div class="card">
+            <h2 class="card-title">Sesi Aktif</h2>
+            <button id="refresh-sessions" class="refresh-btn">Refresh</button>
+            <label class="auto-refresh">
+                <input type="checkbox" id="auto-refresh"> Auto-refresh (5s)
+            </label>
+            <div id="sessions-container">
+                <p class="no-sessions">Tidak ada sesi aktif</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2 class="card-title">Log <span id="session-title"></span></h2>
+            <button id="refresh-logs" class="refresh-btn" disabled>Refresh Log</button>
+            <div id="log-container" class="log-container">
+                <p>Pilih sesi untuk melihat log</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variabel global
+        let currentSessionId = null;
+        let autoRefreshInterval = null;
+        
+        // Fungsi untuk memuat daftar sesi
+        async function loadSessions() {
+            try {
+                const response = await fetch('/api/sessions');
+                const sessions = await response.json();
+                
+                const sessionsContainer = document.getElementById('sessions-container');
+                
+                if (sessions.length === 0) {
+                    sessionsContainer.innerHTML = '<p class="no-sessions">Tidak ada sesi aktif</p>';
+                    return;
+                }
+                
+                // Urutkan sesi berdasarkan timestamp terbaru
+                sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                let sessionsList = '<ul class="session-list">';
+                
+                sessions.forEach(session => {
+                    const deviceInfo = session.deviceInfo || {};
+                    const firmware = deviceInfo.firmware ? 
+                        `${deviceInfo.firmware.console || 'Unknown'} ${deviceInfo.firmware.version || ''}` : 
+                        'Unknown';
+                    
+                    const isActive = session.id === currentSessionId;
+                    
+                    sessionsList += `
+                        <li class="session-item ${isActive ? 'active' : ''}" data-session-id="${session.id}">
+                            <div>
+                                <span class="status-indicator status-active"></span>
+                                <strong>Sesi: ${session.id}</strong> (${session.logCount} log)
+                            </div>
+                            <div class="device-info">Firmware: ${firmware}</div>
+                            <div class="timestamp">Dimulai: ${new Date(session.timestamp).toLocaleString()}</div>
+                        </li>
+                    `;
+                });
+                
+                sessionsList += '</ul>';
+                sessionsContainer.innerHTML = sessionsList;
+                
+                // Tambahkan event listener untuk setiap sesi
+                document.querySelectorAll('.session-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        currentSessionId = item.dataset.sessionId;
+                        
+                        // Hapus kelas active dari semua item
+                        document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
+                        
+                        // Tambahkan kelas active ke item yang dipilih
+                        item.classList.add('active');
+                        
+                        // Aktifkan tombol refresh log
+                        document.getElementById('refresh-logs').disabled = false;
+                        
+                        // Tampilkan judul sesi
+                        document.getElementById('session-title').textContent = `(${currentSessionId})`;
+                        
+                        // Muat log untuk sesi ini
+                        loadLogs(currentSessionId);
+                    });
+                });
+                
+                // Jika ada sesi yang aktif, muat log untuk sesi tersebut
+                if (currentSessionId) {
+                    loadLogs(currentSessionId);
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+            }
+        }
+        
+        // Fungsi untuk memuat log
+        async function loadLogs(sessionId) {
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/logs`);
+                const logs = await response.json();
+                
+                const logContainer = document.getElementById('log-container');
+                
+                if (logs.length === 0) {
+                    logContainer.innerHTML = '<p>Tidak ada log untuk sesi ini</p>';
+                    return;
+                }
+                
+                let logsHtml = '';
+                
+                logs.forEach(log => {
+                    const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                    logsHtml += `
+                        <div class="log-entry log-${log.levelName}">
+                            <span class="timestamp">[${timestamp}]</span>
+                            <span class="level">[${log.levelName}]</span>
+                            <span class="message">${log.message}</span>
+                        </div>
+                    `;
+                });
+                
+                logContainer.innerHTML = logsHtml;
+                
+                // Scroll ke bawah
+                logContainer.scrollTop = logContainer.scrollHeight;
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+        
+        // Event listener untuk tombol refresh
+        document.getElementById('refresh-sessions').addEventListener('click', loadSessions);
+        document.getElementById('refresh-logs').addEventListener('click', () => {
+            if (currentSessionId) {
+                loadLogs(currentSessionId);
+            }
+        });
+        
+        // Event listener untuk auto-refresh
+        document.getElementById('auto-refresh').addEventListener('change', function() {
+            if (this.checked) {
+                autoRefreshInterval = setInterval(loadSessions, 5000);
+            } else {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+        
+        // Muat sesi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', loadSessions);
+    </script>
+</body>
+</html>

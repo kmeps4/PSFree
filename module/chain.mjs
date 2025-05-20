@@ -286,6 +286,11 @@ export class ChainBase {
     }
 
     get_gadget(insn_str) {
+        // Pastikan this.gadgets ada dan merupakan Map
+        if (!this.gadgets || typeof this.gadgets.get !== 'function') {
+            throw Error(`gadgets not initialized or not a Map: ${typeof this.gadgets}`);
+        }
+
         const addr = this.gadgets.get(insn_str);
         if (addr === undefined) {
             throw Error(`gadget not found: ${insn_str}`);
@@ -380,7 +385,7 @@ export class ChainBase {
     }
 
     push_clear_errno() {
-        throw Error('not implemented'); 
+        throw Error('not implemented');
     }
 
     // get the rax register
@@ -532,6 +537,11 @@ export class ChainBase {
 }
 
 export function get_gadget(map, insn_str) {
+    // Pastikan map ada dan merupakan Map
+    if (!map || typeof map.get !== 'function') {
+        throw Error(`gadget map not initialized or not a Map: ${typeof map}`);
+    }
+
     const addr = map.get(insn_str);
     if (addr === undefined) {
         throw Error(`gadget not found: ${insn_str}`);
@@ -568,14 +578,55 @@ export let init_gadget_map = null;
 export let Chain = null;
 
 export async function init() {
-    const module = await load_fw_specific(config.target);
-    Chain = module.Chain;
-    module.init(Chain);
-    ({
-        gadgets,
-        libwebkit_base,
-        libkernel_base,
-        libc_base,
-        init_gadget_map,
-    } = module);
+    try {
+        console.log('Initializing ROP chain module...');
+
+        // Load firmware-specific module
+        const module = await load_fw_specific(config.target);
+
+        // Pastikan module berhasil dimuat
+        if (!module) {
+            throw new Error('Failed to load firmware-specific module');
+        }
+
+        // Pastikan Chain ada di module
+        if (!module.Chain) {
+            throw new Error('Chain not found in firmware-specific module');
+        }
+
+        // Simpan Chain
+        Chain = module.Chain;
+
+        // Inisialisasi Chain
+        try {
+            module.init(Chain);
+        } catch (e) {
+            console.error('Error initializing Chain:', e);
+            throw e;
+        }
+
+        // Ekstrak variabel dari module
+        ({
+            gadgets,
+            libwebkit_base,
+            libkernel_base,
+            libc_base,
+            init_gadget_map,
+        } = module);
+
+        // Pastikan gadgets diinisialisasi
+        if (!gadgets || typeof gadgets.get !== 'function') {
+            throw new Error(`gadgets not initialized or not a Map: ${typeof gadgets}`);
+        }
+
+        // Pastikan init_gadget_map diinisialisasi
+        if (typeof init_gadget_map !== 'function') {
+            throw new Error(`init_gadget_map not initialized or not a function: ${typeof init_gadget_map}`);
+        }
+
+        console.log('ROP chain module initialized successfully');
+    } catch (e) {
+        console.error('Error in chain.mjs init:', e);
+        throw e;
+    }
 }

@@ -145,7 +145,7 @@ const webkit_gadget_offsets = new Map(Object.entries({
     'mov qword ptr [rdi], rax; ret' : 0x000000000000613b, // `48 89 07 c3`
     'mov dword ptr [rdi], eax; ret' : 0x000000000000613c, // `89 07 c3`
     'mov dword ptr [rax], esi; ret' : 0x00000000005c3482, // `89 30 c3`
-  
+
 
     [jop2] : 0x0000000000683800,
     [jop3] : 0x0000000000303906,
@@ -167,7 +167,11 @@ const libkernel_gadget_offsets = new Map(Object.entries({
     '__error' : 0xCB80,
 }));
 
+// Inisialisasi gadgets sebagai Map kosong
 export const gadgets = new Map();
+
+// Pastikan gadgets diekspos ke window untuk debugging
+window.rop_gadgets = gadgets;
 
 function get_bases() {
     const textarea = document.createElement('textarea');
@@ -360,15 +364,47 @@ export class Chain900 extends Chain900Base {
 export const Chain = Chain900;
 
 export function init(Chain) {
-    [libwebkit_base, libkernel_base, libc_base] = get_bases();
+    try {
+        // Dapatkan base addresses
+        [libwebkit_base, libkernel_base, libc_base] = get_bases();
 
-    init_gadget_map(gadgets, webkit_gadget_offsets, libwebkit_base);
-    init_gadget_map(gadgets, libc_gadget_offsets, libc_base);
-    init_gadget_map(gadgets, libkernel_gadget_offsets, libkernel_base);
-    init_syscall_array(syscall_array, libkernel_base, 300 * KB);
-    log('syscall_array:');
-    log(syscall_array);
-    Chain.init_class(gadgets, syscall_array);
+        log('Base addresses:');
+        log(`libwebkit_base: ${libwebkit_base}`);
+        log(`libkernel_base: ${libkernel_base}`);
+        log(`libc_base: ${libc_base}`);
+
+        // Inisialisasi gadget maps
+        init_gadget_map(gadgets, webkit_gadget_offsets, libwebkit_base);
+        init_gadget_map(gadgets, libc_gadget_offsets, libc_base);
+        init_gadget_map(gadgets, libkernel_gadget_offsets, libkernel_base);
+
+        // Inisialisasi syscall array
+        init_syscall_array(syscall_array, libkernel_base, 300 * KB);
+        log('syscall_array:');
+        log(syscall_array);
+
+        // Pastikan Chain adalah fungsi konstruktor yang valid
+        if (typeof Chain !== 'function') {
+            throw new Error(`Chain is not a constructor: ${typeof Chain}`);
+        }
+
+        // Pastikan Chain.init_class adalah fungsi
+        if (typeof Chain.init_class !== 'function') {
+            throw new Error(`Chain.init_class is not a function: ${typeof Chain.init_class}`);
+        }
+
+        // Inisialisasi Chain class
+        Chain.init_class(gadgets, syscall_array);
+
+        log('Chain initialized successfully');
+
+        // Ekspos Chain ke window untuk debugging
+        window.rop_chain = Chain;
+    } catch (e) {
+        log(`Error in init: ${e.message}`);
+        console.error('Error in init:', e);
+        throw e;
+    }
 }
 
 log('Chain900');

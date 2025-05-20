@@ -10,3 +10,10 @@ server/server.js
 # Remote logger logs - mengabaikan semua file log
 server/logs/
 *.log
+flowchart.mmd
+exploit-flow.md
+error-handling.mmd
+exploit-flow-main.mmd
+exploit-flow.mmd
+offline-caching.mmd
+payload-selection.mmd

@@ -49,4 +49,4 @@ addEventListener('error', event => {
 
 // we have to dynamically import the program if we want to catch its syntax
 // errors
-import('./psfree.mjs');
+// import('./psfree.mjs'); // Dinonaktifkan untuk memungkinkan pemilihan payload terlebih dahulu

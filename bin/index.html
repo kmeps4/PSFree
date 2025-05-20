@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>PSFree Payload Directory</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0d1117;
+            color: #e6edf3;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #58a6ff;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #161b22;
+            border-radius: 5px;
+            border: 1px solid #30363d;
+        }
+        a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>PSFree Payload Directory</h1>
+    <p>This directory contains payload files for PSFree exploit.</p>
+    <ul id="file-list">
+        <!-- File list will be populated by JavaScript -->
+    </ul>
+
+    <script>
+        // Function to list files in the directory
+        function listFiles() {
+            const fileList = document.getElementById('file-list');
+            
+            // Get all links in the page (Apache directory listing)
+            const links = document.querySelectorAll('a');
+            
+            // Filter for .bin files
+            const binFiles = Array.from(links)
+                .filter(link => link.href.endsWith('.bin'))
+                .map(link => {
+                    const fileName = link.textContent || link.href.split('/').pop();
+                    return { name: fileName, href: link.href };
+                });
+            
+            // Clear the list
+            fileList.innerHTML = '';
+            
+            // Add each file to the list
+            if (binFiles.length > 0) {
+                binFiles.forEach(file => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+                    a.href = file.href;
+                    a.textContent = file.name;
+                    li.appendChild(a);
+                    fileList.appendChild(li);
+                });
+            } else {
+                // If no bin files found, show a message
+                const li = document.createElement('li');
+                li.textContent = 'No payload files found.';
+                fileList.appendChild(li);
+            }
+        }
+        
+        // Call the function when the page loads
+        window.addEventListener('DOMContentLoaded', listFiles);
+    </script>
+</body>
+</html>

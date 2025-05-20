@@ -859,4 +859,7 @@ async function main() {
     // path to your script that will use the exploit
     import('./lapse.mjs');
 }
-main();
+
+// Tidak lagi menjalankan main() secara otomatis
+// main() akan dipanggil oleh runExploit() dari js/ui.js
+window.runPSFreeExploit = main;

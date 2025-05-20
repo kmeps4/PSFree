@@ -1,0 +1,243 @@
+/*
+ * PSFree Light Theme
+ * Tema terang dengan kontras tinggi untuk PSFree
+ */
+
+body {
+    font-family: 'Liberation Mono', monospace;
+    margin: 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    color: #212529;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.header h1 {
+    margin: 0;
+    color: #007bff;
+}
+
+.header p {
+    margin: 5px 0;
+    color: #6c757d;
+}
+
+.card {
+    background-color: #ffffff;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.card-title {
+    margin-top: 0;
+    color: #007bff;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 10px;
+}
+
+.btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.btn:hover {
+    background-color: #0069d9;
+}
+
+.btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.progress-container {
+    width: 100%;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+.progress-bar {
+    height: 10px;
+    background-color: #007bff;
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s;
+}
+
+#console {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+    height: 300px;
+    overflow-y: auto;
+    font-family: 'Liberation Mono', monospace;
+    white-space: pre-wrap;
+    color: #212529;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-waiting {
+    background-color: #ffc107;
+}
+
+.status-running {
+    background-color: #007bff;
+    animation: pulse 1.5s infinite;
+}
+
+.status-success {
+    background-color: #28a745;
+}
+
+.status-error {
+    background-color: #dc3545;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    margin-right: 5px;
+}
+
+.tab.active {
+    background-color: #ffffff;
+    border-bottom: 1px solid #ffffff;
+    position: relative;
+    top: 1px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.tab-content {
+    display: none;
+    padding: 15px;
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0 6px 6px 6px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.payload-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background-color: #f8f9fa;
+}
+
+.payload-item.selected {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.payload-info {
+    flex-grow: 1;
+    margin-left: 10px;
+}
+
+.server-info {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 12px;
+    z-index: 9999;
+    border: 1px solid #dee2e6;
+}
+
+/* PS4 specific optimizations */
+@media screen and (max-width: 1920px) and (max-height: 1080px) {
+    .container {
+        max-width: 1600px;
+    }
+
+    #console {
+        height: 400px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        font-size: 18px;
+    }
+
+    .tab {
+        padding: 12px 24px;
+        font-size: 18px;
+    }
+}
+
+/* Focus styles for controller navigation */
+.btn:focus, .tab:focus, .payload-item:focus {
+    outline: 3px solid #007bff;
+}
+
+/* Highlight the currently focused element for controller navigation */
+.controller-focus {
+    outline: 3px solid #007bff !important;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+}

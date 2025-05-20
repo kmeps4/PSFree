@@ -19,7 +19,14 @@ function validatePayload(buffer) {
 
 // Fungsi untuk memuat payload dengan penanganan error
 function loadPayload() {
-    console.log("Loading payload.bin...");
+    // Cek apakah PayloadSelector sudah diinisialisasi
+    if (window.PayloadSelector && window.PayloadSelector.selectedPayload) {
+        console.log("Payload already loaded by PayloadSelector:", window.PayloadSelector.selectedPayload);
+        return;
+    }
+
+    // Jika PayloadSelector belum diinisialisasi, muat payload default
+    console.log("Loading default payload.bin...");
 
     fetch('./payload.bin')
         .then(res => {
@@ -39,7 +46,10 @@ function loadPayload() {
 
                     // Dispatch event untuk memberi tahu komponen lain
                     const event = new CustomEvent('payloadLoaded', {
-                        detail: { size: arr.byteLength }
+                        detail: {
+                            name: 'payload.bin',
+                            size: arr.byteLength
+                        }
                     });
                     document.dispatchEvent(event);
                 }
@@ -48,7 +58,10 @@ function loadPayload() {
 
                 // Dispatch event error
                 const event = new CustomEvent('payloadError', {
-                    detail: { error: e.message }
+                    detail: {
+                        name: 'payload.bin',
+                        error: e.message
+                    }
                 });
                 document.dispatchEvent(event);
             }
@@ -58,11 +71,22 @@ function loadPayload() {
 
             // Dispatch event error
             const event = new CustomEvent('payloadError', {
-                detail: { error: err.message }
+                detail: {
+                    name: 'payload.bin',
+                    error: err.message
+                }
             });
             document.dispatchEvent(event);
         });
 }
 
-// Muat payload saat script dijalankan
-loadPayload();
+// Muat payload saat script dijalankan, tetapi hanya jika PayloadSelector belum diinisialisasi
+document.addEventListener('DOMContentLoaded', function() {
+    // Tunggu sedikit untuk memastikan PayloadSelector sudah diinisialisasi
+    setTimeout(function() {
+        // Jika PayloadSelector belum memuat payload, muat payload default
+        if (!window.pld) {
+            loadPayload();
+        }
+    }, 500);
+});
