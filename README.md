@@ -4,8 +4,9 @@ Lapse Kex ported to 9.00 - Still WIP
 
 Very fast and reliable but can KP :P
 
-- Needs a bin loader.
+- Needs a bin loader on Port 9020.
 - Some performance Tweaks??.
+- Add sysveri Patch
   
 PR are welcome 
 
