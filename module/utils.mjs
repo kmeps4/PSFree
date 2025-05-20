@@ -25,38 +25,16 @@ export class DieError extends Error {
 }
 
 export function die(msg='') {
-    // Kirim ke remote logger jika tersedia
-    if (window.RemoteLogger) {
-        window.RemoteLogger.error(`FATAL ERROR: ${msg}`);
-    }
-
-    // Juga kirim ke console.error browser untuk debugging
-    window.console.error(`FATAL ERROR: ${msg}`);
-
-    // Update UI status jika tersedia
-    if (typeof updateUIStatus === 'function') {
-        updateUIStatus('error', msg);
-    }
-
     throw new DieError(msg);
 }
 
-const consoleElement = document.getElementById('console');
+const console = document.getElementById('console');
 export function log(msg='') {
-    // Tambahkan ke konsol lokal
-    consoleElement.append(msg + '\n');
-
-    // Kirim ke remote logger jika tersedia
-    if (window.RemoteLogger) {
-        window.RemoteLogger.debug(msg);
-    }
-
-    // Juga kirim ke console.log browser untuk debugging
-    window.console.log(msg);
+    console.append(msg + '\n');
 }
 
 export function clear_log() {
-    consoleElement.innerHTML = null;
+    console.innerHTML = null;
 }
 
 // alignment must be 32 bits and is a power of 2

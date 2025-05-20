@@ -15,115 +15,28 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
-<!DOCTYPE html>
 <html>
     <head>
-        <meta charset="utf-8">
-        <title>PSFree v1.5.0 - PS4/PS5 Exploit</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="css/styles.css">
+        <meta charset='utf-8'>
+        <title>PSFree-Lapse Exploit For 9.00</title>
         <style>
             @font-face {
-                font-family: 'Liberation Mono';
+                font-family: 'logging';
                 src: url('fonts/LiberationMono-Regular.ttf');
+            }
+            #console {
+                font-family: 'logging';
             }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>PSFree v1.5.0</h1>
-                <p>PS4/PS5 Exploit Chain</p>
-            </div>
-
-            <div class="card">
-                <h2 class="card-title">Status</h2>
-                <div id="status-container">
-                    <p><span class="status-indicator status-running" id="status-icon"></span> <span id="status-text">Running exploit...</span></p>
-                    <div class="progress-container">
-                        <div class="progress-bar" id="progress-bar"></div>
-                    </div>
-                </div>
-                <!-- Run exploit and reset buttons removed -->
-            </div>
-
-            <div class="tabs">
-                <div class="tab active" data-tab="console">Console</div>
-                <!-- Payloads and settings tabs removed -->
-            </div>
-
-            <div class="tab-content active" id="tab-console">
-                <pre id="console"></pre>
-            </div>
-
-            <!-- Payloads and settings tabs removed -->
-
-            <!-- Info content moved below console -->
-            <div class="card" style="margin-top: 20px;">
-                <h2 class="card-title">About PSFree</h2>
-                <p>PSFree is an exploit chain for PS4 and PS5.</p>
-                <p>Current version: <strong>1.5.0</strong></p>
-                <p>Supported firmware:</p>
-                <ul>
-                    <li>PS4: 5.00 - 12.50</li>
-                    <li>PS5: 1.00 - 10.20</li>
-                </ul>
-                <p>PSFree uses:</p>
-                <ul>
-                    <li>WebKit exploit (CVE-2022-22620)</li>
-                    <li>Lapse kernel exploit</li>
-                </ul>
-                <p>See <a href="./about.html" data-jslicense="1">JavaScript license info</a> for source code and license details.</p>
-                <p>Donations (Monero/XMR):<br>
-                86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS</p>
-            </div>
-
-            <div class="card" style="margin-top: 20px;">
-                <h2 class="card-title">Quick Guide</h2>
-                <ol>
-                    <li>Open this page in the PS4 browser</li>
-                    <li>The exploit will run automatically</li>
-                    <li>Wait for the process to complete</li>
-                    <li>If successful, the payload will run automatically</li>
-                </ol>
-                <p><strong>Note:</strong> If a Kernel Panic occurs, power off the console (do not restart) and try again.</p>
-                <p><strong>Important:</strong> This website uses the default payload located in the root folder.</p>
-            </div>
-        </div>
-
-        <script src="js/remote-logger.js"></script>
-        <script src="js/payload-manager.js"></script>
-        <script src="js/ui.js"></script>
-        <script src="payload.js"></script>
-        <script>
-            // Initialize Remote Logger
-            document.addEventListener('DOMContentLoaded', function() {
-                // Try to get server IP from URL parameter
-                const urlParams = new URLSearchParams(window.location.search);
-                const serverIp = urlParams.get('server');
-
-                // Logger configuration
-                const loggerConfig = {
-                    enabled: true,
-                    localConsole: true
-                };
-
-                // If a server parameter is present, use it
-                if (serverIp) {
-                    loggerConfig.serverUrl = `http://${serverIp}:3000`;
-                }
-
-                // Initialize logger
-                window.RemoteLogger.init(loggerConfig);
-
-                // Log browser info
-                window.RemoteLogger.info('PSFree initialized', {
-                    userAgent: navigator.userAgent,
-                    url: window.location.href,
-                    timestamp: new Date().toISOString()
-                });
-            });
-        </script>
-        <script type="module" src="./alert.mjs"></script>
+        PSFree: A PS4/PS5 Exploit Chain<br>
+        Donation (Monero/XMR):<br>
+        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS<br>
+        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
+        source code and license.<br>
+        <pre id='console'></pre>
     </body>
+    <script src="payload.js"></script>
+    <script type='module' src='./alert.mjs'></script>
 </html>
