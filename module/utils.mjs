@@ -33,6 +33,11 @@ export function die(msg='') {
     // Juga kirim ke console.error browser untuk debugging
     window.console.error(`FATAL ERROR: ${msg}`);
 
+    // Kirim log status eksploitasi yang jelas untuk penandaan folder log
+    if (typeof log === 'function') {
+        log(`EXPLOIT_STATUS: FAILED - ${msg}`);
+    }
+
     // Update UI status jika tersedia
     if (typeof updateUIStatus === 'function') {
         updateUIStatus('error', msg);

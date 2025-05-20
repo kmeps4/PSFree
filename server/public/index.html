@@ -14,13 +14,13 @@
             padding: 0;
             line-height: 1.5;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         header {
             background-color: #007bff;
             color: white;
@@ -28,12 +28,12 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
+
         header h1 {
             margin: 0;
             padding: 0 20px;
         }
-        
+
         .card {
             background-color: white;
             border-radius: 5px;
@@ -41,34 +41,34 @@
             margin-bottom: 20px;
             padding: 20px;
         }
-        
+
         .card-title {
             margin-top: 0;
             border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
             color: #007bff;
         }
-        
+
         .session-list {
             list-style: none;
             padding: 0;
         }
-        
+
         .session-item {
             padding: 10px;
             border-bottom: 1px solid #dee2e6;
             cursor: pointer;
         }
-        
+
         .session-item:hover {
             background-color: #f1f3f5;
         }
-        
+
         .session-item.active {
             background-color: #e9ecef;
             font-weight: bold;
         }
-        
+
         .log-container {
             height: 500px;
             overflow-y: auto;
@@ -78,32 +78,32 @@
             padding: 10px;
             font-family: monospace;
         }
-        
+
         .log-entry {
             margin-bottom: 5px;
             padding: 5px;
             border-radius: 3px;
         }
-        
+
         .log-DEBUG {
             color: #6c757d;
         }
-        
+
         .log-INFO {
             color: #0d6efd;
         }
-        
+
         .log-WARN {
             color: #fd7e14;
             background-color: #fff3cd;
         }
-        
+
         .log-ERROR {
             color: #dc3545;
             background-color: #f8d7da;
         }
-        
-        .refresh-btn {
+
+        .refresh-btn, .mark-btn {
             background-color: #007bff;
             color: white;
             border: none;
@@ -111,12 +111,29 @@
             border-radius: 5px;
             cursor: pointer;
             margin-bottom: 10px;
+            margin-right: 5px;
         }
-        
-        .refresh-btn:hover {
+
+        .refresh-btn:hover, .mark-btn:hover {
             background-color: #0069d9;
         }
-        
+
+        .mark-success {
+            background-color: #28a745;
+        }
+
+        .mark-success:hover {
+            background-color: #218838;
+        }
+
+        .mark-failed {
+            background-color: #dc3545;
+        }
+
+        .mark-failed:hover {
+            background-color: #c82333;
+        }
+
         .status-indicator {
             display: inline-block;
             width: 10px;
@@ -124,31 +141,31 @@
             border-radius: 50%;
             margin-right: 5px;
         }
-        
+
         .status-active {
             background-color: #28a745;
         }
-        
+
         .status-inactive {
             background-color: #dc3545;
         }
-        
+
         .device-info {
             font-size: 0.9em;
             color: #6c757d;
         }
-        
+
         .timestamp {
             font-size: 0.8em;
             color: #6c757d;
         }
-        
+
         .no-sessions {
             text-align: center;
             padding: 20px;
             color: #6c757d;
         }
-        
+
         .auto-refresh {
             margin-left: 10px;
         }
@@ -158,7 +175,7 @@
     <header>
         <h1>PSFree Logger</h1>
     </header>
-    
+
     <div class="container">
         <div class="card">
             <h2 class="card-title">Sesi Aktif</h2>
@@ -170,47 +187,51 @@
                 <p class="no-sessions">Tidak ada sesi aktif</p>
             </div>
         </div>
-        
+
         <div class="card">
             <h2 class="card-title">Log <span id="session-title"></span></h2>
-            <button id="refresh-logs" class="refresh-btn" disabled>Refresh Log</button>
+            <div>
+                <button id="refresh-logs" class="refresh-btn" disabled>Refresh Log</button>
+                <button id="mark-success" class="mark-btn mark-success" disabled>Tandai Berhasil</button>
+                <button id="mark-failed" class="mark-btn mark-failed" disabled>Tandai Gagal</button>
+            </div>
             <div id="log-container" class="log-container">
                 <p>Pilih sesi untuk melihat log</p>
             </div>
         </div>
     </div>
-    
+
     <script>
         // Variabel global
         let currentSessionId = null;
         let autoRefreshInterval = null;
-        
+
         // Fungsi untuk memuat daftar sesi
         async function loadSessions() {
             try {
                 const response = await fetch('/api/sessions');
                 const sessions = await response.json();
-                
+
                 const sessionsContainer = document.getElementById('sessions-container');
-                
+
                 if (sessions.length === 0) {
                     sessionsContainer.innerHTML = '<p class="no-sessions">Tidak ada sesi aktif</p>';
                     return;
                 }
-                
+
                 // Urutkan sesi berdasarkan timestamp terbaru
                 sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                
+
                 let sessionsList = '<ul class="session-list">';
-                
+
                 sessions.forEach(session => {
                     const deviceInfo = session.deviceInfo || {};
-                    const firmware = deviceInfo.firmware ? 
-                        `${deviceInfo.firmware.console || 'Unknown'} ${deviceInfo.firmware.version || ''}` : 
+                    const firmware = deviceInfo.firmware ?
+                        `${deviceInfo.firmware.console || 'Unknown'} ${deviceInfo.firmware.version || ''}` :
                         'Unknown';
-                    
+
                     const isActive = session.id === currentSessionId;
-                    
+
                     sessionsList += `
                         <li class="session-item ${isActive ? 'active' : ''}" data-session-id="${session.id}">
                             <div>
@@ -222,32 +243,34 @@
                         </li>
                     `;
                 });
-                
+
                 sessionsList += '</ul>';
                 sessionsContainer.innerHTML = sessionsList;
-                
+
                 // Tambahkan event listener untuk setiap sesi
                 document.querySelectorAll('.session-item').forEach(item => {
                     item.addEventListener('click', () => {
                         currentSessionId = item.dataset.sessionId;
-                        
+
                         // Hapus kelas active dari semua item
                         document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
-                        
+
                         // Tambahkan kelas active ke item yang dipilih
                         item.classList.add('active');
-                        
-                        // Aktifkan tombol refresh log
+
+                        // Aktifkan tombol refresh log dan tombol penandaan
                         document.getElementById('refresh-logs').disabled = false;
-                        
+                        document.getElementById('mark-success').disabled = false;
+                        document.getElementById('mark-failed').disabled = false;
+
                         // Tampilkan judul sesi
                         document.getElementById('session-title').textContent = `(${currentSessionId})`;
-                        
+
                         // Muat log untuk sesi ini
                         loadLogs(currentSessionId);
                     });
                 });
-                
+
                 // Jika ada sesi yang aktif, muat log untuk sesi tersebut
                 if (currentSessionId) {
                     loadLogs(currentSessionId);
@@ -256,22 +279,22 @@
                 console.error('Error loading sessions:', error);
             }
         }
-        
+
         // Fungsi untuk memuat log
         async function loadLogs(sessionId) {
             try {
                 const response = await fetch(`/api/sessions/${sessionId}/logs`);
                 const logs = await response.json();
-                
+
                 const logContainer = document.getElementById('log-container');
-                
+
                 if (logs.length === 0) {
                     logContainer.innerHTML = '<p>Tidak ada log untuk sesi ini</p>';
                     return;
                 }
-                
+
                 let logsHtml = '';
-                
+
                 logs.forEach(log => {
                     const timestamp = new Date(log.timestamp).toLocaleTimeString();
                     logsHtml += `
@@ -282,16 +305,45 @@
                         </div>
                     `;
                 });
-                
+
                 logContainer.innerHTML = logsHtml;
-                
+
                 // Scroll ke bawah
                 logContainer.scrollTop = logContainer.scrollHeight;
             } catch (error) {
                 console.error('Error loading logs:', error);
             }
         }
-        
+
+        // Fungsi untuk menandai folder log
+        async function markSession(sessionId, status) {
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/mark`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Sesi berhasil ditandai sebagai ${status}`);
+
+                    // Refresh daftar sesi
+                    loadSessions();
+
+                    // Update currentSessionId dengan ID baru
+                    currentSessionId = result.newSessionId;
+                } else {
+                    alert(`Gagal menandai sesi: ${await response.text()}`);
+                }
+            } catch (error) {
+                console.error('Error marking session:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
         // Event listener untuk tombol refresh
         document.getElementById('refresh-sessions').addEventListener('click', loadSessions);
         document.getElementById('refresh-logs').addEventListener('click', () => {
@@ -299,7 +351,24 @@
                 loadLogs(currentSessionId);
             }
         });
-        
+
+        // Event listener untuk tombol penandaan
+        document.getElementById('mark-success').addEventListener('click', () => {
+            if (currentSessionId) {
+                if (confirm('Apakah Anda yakin ingin menandai sesi ini sebagai BERHASIL?')) {
+                    markSession(currentSessionId, 'SUCCESS');
+                }
+            }
+        });
+
+        document.getElementById('mark-failed').addEventListener('click', () => {
+            if (currentSessionId) {
+                if (confirm('Apakah Anda yakin ingin menandai sesi ini sebagai GAGAL?')) {
+                    markSession(currentSessionId, 'FAILED');
+                }
+            }
+        });
+
         // Event listener untuk auto-refresh
         document.getElementById('auto-refresh').addEventListener('change', function() {
             if (this.checked) {
@@ -308,7 +377,7 @@
                 clearInterval(autoRefreshInterval);
             }
         });
-        
+
         // Muat sesi saat halaman dimuat
         document.addEventListener('DOMContentLoaded', loadSessions);
     </script>

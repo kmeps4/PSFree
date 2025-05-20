@@ -3384,6 +3384,10 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
+
+    // Kirim log status eksploitasi yang jelas untuk penandaan folder log
+    log('EXPLOIT_STATUS: SUCCESS - Kernel exploit berhasil');
+
     updateUIStatus('success', 'Kernel exploit berhasil!');
     updateUIProgress('complete', 100);
 
@@ -3730,6 +3734,10 @@ async function runPayload() {
         }
 
         log("Payload thread created successfully");
+
+        // Kirim log status eksploitasi yang jelas untuk penandaan folder log
+        log('EXPLOIT_STATUS: SUCCESS - Payload berhasil dimuat');
+
         updateUIStatus('success', 'Payload berhasil dijalankan');
 
         // Tandai payload sebagai selesai
