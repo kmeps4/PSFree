@@ -608,10 +608,11 @@ function getMemoryUsage() {
     return "Not available";
 }
 
-// Variabel global untuk deteksi hang
+// Variabel global untuk deteksi hang dan status
 let hangDetectionInterval = null;
 let lastProgressTime = 0;
 let exploitStage = '';
+let payloadCompleted = false; // Flag untuk mencegah refresh berulang
 
 // Fungsi untuk setup deteksi hang
 function setupHangDetection() {
@@ -680,11 +681,8 @@ function setupHangDetection() {
                     // Update progress untuk mencegah deteksi hang berulang
                     updateProgress('recovery_from_string_spray');
 
-                    // Coba restart exploit setelah delay
-                    setTimeout(() => {
-                        log("Restarting exploit after hang...");
-                        location.reload();
-                    }, 2000);
+                    // Tampilkan pesan saja, jangan restart otomatis
+                    log("Hang terdeteksi. Silakan refresh halaman secara manual jika diperlukan.");
                 } else if (exploitStage === 'find_aio_entry' || exploitStage === 'overwrite_rthdr') {
                     log("Attempting recovery from AIO operation hang...");
                     updateUIStatus('error', 'Terdeteksi hang pada operasi AIO, mencoba recovery...');
@@ -692,19 +690,14 @@ function setupHangDetection() {
                     // Update progress untuk mencegah deteksi hang berulang
                     updateProgress('recovery_from_aio');
 
-                    // Coba restart exploit setelah delay
-                    setTimeout(() => {
-                        log("Restarting exploit after hang...");
-                        location.reload();
-                    }, 2000);
+                    // Tampilkan pesan saja, jangan restart otomatis
+                    log("Hang terdeteksi. Silakan refresh halaman secara manual jika diperlukan.");
                 } else {
                     log("Hang detected in unknown stage, restarting...");
                     updateUIStatus('error', 'Terdeteksi hang, mencoba restart...');
 
-                    // Coba restart exploit setelah delay
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
+                    // Tampilkan pesan saja, jangan restart otomatis
+                    log("Hang terdeteksi. Silakan refresh halaman secara manual jika diperlukan.");
                 }
 
                 // Bersihkan interval
@@ -2844,14 +2837,28 @@ async function runPayload() {
         log("Payload thread created successfully");
         updateUIStatus('success', 'Payload berhasil dijalankan');
 
+        // Tandai payload sebagai selesai
+        payloadCompleted = true;
+
         // Trigger event untuk menandai payload selesai
         window.dispatchEvent(new Event('payloadComplete'));
+
+        log("Payload completed successfully, no automatic refresh will be performed.");
 
     } catch (e) {
         log(`ERROR: Exception while running payload: ${e.message}`);
         updateUIStatus('error', `Error saat menjalankan payload: ${e.message}`);
     }
 }
+
+// Tambahkan event listener untuk payloadComplete
+window.addEventListener('payloadComplete', () => {
+    // Lakukan tindakan lain yang diperlukan, tetapi jangan refresh browser
+    log("Payload completion event received");
+
+    // Tampilkan pesan ke pengguna
+    updateUIStatus('success', 'Exploit dan payload berhasil dijalankan. Tidak ada refresh otomatis.');
+});
 
 // Jalankan exploit dan kemudian payload
 kexploit().then(() => {
