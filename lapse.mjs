@@ -1745,7 +1745,7 @@ export async function kexploit() {
     }
 }
 
-setTimeout(kexploit().then(() => {
+kexploit().then(() => {
     function malloc(sz) {
         var backing = new Uint8Array(0x10000 + sz);
         nogc.push(backing);
@@ -1781,4 +1781,4 @@ setTimeout(kexploit().then(() => {
         payload_loader,
         payload_buffer,
     );
-}),1000);
+})
