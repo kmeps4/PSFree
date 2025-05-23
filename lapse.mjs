@@ -1713,15 +1713,6 @@ export async function kexploit() {
             return new Promise(() => {});
     }
 
-    // If setuid is successful, we dont need to run the kexploit again
-    try {
-        if (sysi('setuid', 0) == 0) {
-            log("Not running kexploit again.")
-            return;
-        }
-    }
-    catch (e) {}
-
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
     // use all the cores
