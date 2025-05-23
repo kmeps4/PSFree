@@ -28,6 +28,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 font-family: 'logging';
             }
         </style>
+        <script>
+        if (window.applicationCache.status=='0')
+        {
+          window.location.replace("cache.html");
+        }
+        </script>
     </head>
     <body>
         PSFree: A PS4/PS5 Exploit Chain<br>
