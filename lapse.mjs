@@ -1705,7 +1705,7 @@ export async function kexploit() {
         if (sysi('setuid', 0) == 0) {
             log("Not running kexploit again.");
             runBinLoader();
-            return;
+             return new Promise(() => {});
         }
     }
     catch (e) {}
