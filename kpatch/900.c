@@ -97,9 +97,10 @@ void do_patch(void) {
     write8(kbase, KERNEL_copyinstr, 0xEB);
     write8(kbase, KERNEL_copystr, 0xEB);
     write16(kbase, KERNEL_veriPatch, 0x9090);
-    write32(kbase, KERNEL_setcr0_patch, 0xC3C7220F);        
+    write32(kbase, KERNEL_setcr0_patch, 0xC3C7220F);
+        
     const size_t offset_sysent_11 = 0x1100520;
-    write32(kbase, offset_sysent_11, 2);
+    write32(kbase, offset_sysent_11, 6);
     write64(kbase, offset_sysent_11 + 8, kbase + 0x4c7ad);
     write32(kbase, offset_sysent_11 + 0x2c, 1);  
    
