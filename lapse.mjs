@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 anonymous
+F/* Copyright (C) 2025 anonymous
 This file is part of PSFree.
 
 PSFree is free software: you can redistribute it and/or modify
@@ -1702,8 +1702,6 @@ export async function kexploit() {
             return new Promise(() => {});
       }
 
-
-    // If setuid is successful, we dont need to run the kexploit again
      try {
         chain.sys('setuid', 0);
         }
