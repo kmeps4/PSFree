@@ -1,4 +1,4 @@
-F/* Copyright (C) 2025 anonymous
+/* Copyright (C) 2025 anonymous
 This file is part of PSFree.
 
 PSFree is free software: you can redistribute it and/or modify
