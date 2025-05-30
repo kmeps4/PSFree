@@ -1603,6 +1603,7 @@ async function patch_kernel(kbase, kmem, p_ucred, restore_info) {
     kmem.write64(sysent_661.add(8), sy_call);
     // .sy_thrcnt = SY_THR_STATIC
     kmem.write32(sysent_661.add(0x2c), sy_thrcnt);
+    sessionStorage.setItem('jbsuccess', 1);
     alert("kernel exploit succeeded!");
 }
 
