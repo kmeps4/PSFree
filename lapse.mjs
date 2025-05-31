@@ -1697,18 +1697,17 @@ export async function kexploit() {
     await init();
     const _init_t2 = performance.now();
 
-   if (localStorage.ExploitLoaded === "yes" && sessionStorage.ExploitLoaded!="yes") {
-           runBinLoader();
-            return new Promise(() => {});
-      }
-
      try {
         chain.sys('setuid', 0);
         }
-    
     catch (e) {
         localStorage.ExploitLoaded = "no";
     }
+    
+     if (localStorage.ExploitLoaded === "yes" && sessionStorage.ExploitLoaded!="yes") {
+           runBinLoader();
+            return new Promise(() => {});
+      }
  
     // fun fact:
     // if the first thing you do since boot is run the web browser, WebKit can
