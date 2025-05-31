@@ -8,7 +8,6 @@ config.mjs
 index.html
 lapse.mjs
 payload.bin
-payload.js
 psfree.mjs
 fonts\LiberationMono-Regular.ttf
 kpatch\900.elf
