@@ -1705,7 +1705,7 @@ export async function kexploit() {
      try {
         chain.sys('setuid', 0);
         }
-    }
+    
     catch (e) {
         localStorage.ExploitLoaded = "no";
     }
