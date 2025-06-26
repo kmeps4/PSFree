@@ -1,47 +1,56 @@
-<!-- Copyright (C) 2023-2025 anonymous
-
-This file is part of PSFree.
-
-PSFree is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-PSFree is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
--->
+<!DOCTYPE html>
 <html>
-    <head>
-        <meta charset='utf-8'>
-        <title>PSFree-Lapse Exploit For PS4 9.00</title>
-        <style>
-            @font-face {
-                font-family: 'logging';
-                src: url('fonts/LiberationMono-Regular.ttf');
-            }
-            #console {
-                font-family: 'logging';
-            }
-        </style>
-        <script>
-        if (window.applicationCache.status=='0')
-        {
-          window.location.replace("cache.html");
-        }
-        </script>
-    </head>
-    <body>
-        PSFree: A PS4/PS5 Exploit Chain<br>
-        Donation (Monero/XMR):<br>
-        86Fk3X9AE94EGKidzRbvyiVgGNYD3qZnuKNq1ZbsomFWXHYm6TtAgz9GNGitPWadkS3Wr9uXoT29U1SfdMtJ7QNKQpW1CVS<br>
-        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
-        source code and license.<br>
-        <pre id='console'></pre>
-    </body>
-    <script type='module' src='./alert.mjs'></script>
+<head>
+<meta charset="UTF-8">
+<title>GameZone - PS4 Exploit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    color: #fff;
+    background: url('gamezone.png') no-repeat center center fixed;
+    background-size: cover;
+}
+h1 {
+    font-size: 3em;
+    text-shadow: 2px 2px 5px rgba(0,0,0,.7);
+    margin: 40px 0 20px 0;
+}
+.content {
+    background-color: rgba(0,0,0,0.5);
+    display: inline-block;
+    padding: 20px;
+    border-radius: 10px;
+}
+.button {
+    display: inline-block;
+    padding: 12px 20px;
+    margin: 10px;
+    font-size: 1.1em;
+    color: #fff;
+    background-color: #007BFF;
+    border-radius: 5px;
+    text-decoration: none;
+}
+.footer {
+    margin: 40px 0 20px;
+    font-size: 0.9em;
+    color: #ccc;
+}
+</style>
+</head>
+<body>
+    <h1>GameZone</h1>
+    <div class="content">
+        <p>Welcome to GameZone - Your PS4 Exploit Portal</p>
+        <a class="button" href="payload1.html">Load Exploit 1</a>
+        <a class="button" href="payload2.html">Load Exploit 2</a>
+    </div>
+    <div class="footer">
+        &copy; 2025 GameZone by Ahmed Lokir & Haider Skiba. All Rights Reserved.
+    </div>
+</body>
 </html>
