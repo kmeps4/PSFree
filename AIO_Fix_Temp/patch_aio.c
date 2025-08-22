@@ -1,4 +1,5 @@
 void patch_aio(void * kbase) {
+    //Offsets for 8.0x
     {
         size_t off = 0x9f141;
         u8 patch[] = {0xeb, 0x48};
@@ -10,7 +11,7 @@ void patch_aio(void * kbase) {
     }
     {
         size_t off = 0x9f18b;
-        u8 patch[] = {41, 83, 0xbf, 0xa0, 0x04, 0x00, 0x00, 0x00};
+        u8 patch[] = {0x41, 0x83, 0xbf, 0xa0, 0x04, 0x00, 0x00, 0x00};
         memcpy(kbase + off, patch, sizeof patch);
     }
     {
