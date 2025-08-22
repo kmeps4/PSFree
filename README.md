@@ -1,13 +1,12 @@
-# PSFree version 1.5.0
+# PSFree version 1.5.0b
 
-Lapse Kex ported to 9.00 - Still WIP
+Lapse Kex ported to 9.00
 
 Very fast and reliable but can KP :P
 
-Warning: This repository is a work in progress. Do not use it by default—or better yet, don’t use it at all—until I and/or someone else declare it stable. There are issues with certain games, such as black screens, problems with save data, and multiple kernel panics. The offsets for PS4 9.00 still need to be verified. If you choose to use it, do so at your own risk.
+Update: I've added an payload having some dtor handle patches related to aio bugs.. Now all games should work properly.. patches were made by abc for 8.0x and I ported to 9.00. Thx a lot to Sistro and CTN for some explanation on low level coding :)
 
-TODO:
-- Fix game issues. Black screen. Saves. No boot
+Warning: This repository is a work in progress. Do not use it by default—or better yet, don’t use it at all—until I and/or someone else declare it stable. There are issues with certain games, such as black screens, problems with save data, and multiple kernel panics. The offsets for PS4 9.00 still need to be verified. If you choose to use it, do so at your own risk.
   
 PR are welcome 
 
