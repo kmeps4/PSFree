@@ -51,6 +51,15 @@ void restore(struct kexec_args *uap) {
     *pktinfo_field = 0;
     u64 *pktinfo_field2 = uap->arg4;
     *pktinfo_field2 = 0;
+
+    // get kernel base
+    const u64 xfast_syscall_off = 0x1c0;
+    void * const kbase = (void *)rdmsr(0xc0000082) - xfast_syscall_off;
+
+    u64 *sysent_661_save = uap->arg5;
+    for (int i = 0; i < 0x30; i += 8) {
+        write64(kbase, 0x1107f00 + i, sysent_661_save[i / 8]);
+    }
 }
 
 void do_patch(void) {
