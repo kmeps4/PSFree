@@ -32,6 +32,7 @@ struct kexec_args {
 };
 
 void do_patch(void *kbase);
+void patch_aio(void *kbase);
 void restore(void *kbase, struct kexec_args *uap);
 
 __attribute__((section (".text.start")))
@@ -40,6 +41,7 @@ int kpatch(void *td, struct kexec_args *uap) {
     void * const kbase = (void *)rdmsr(0xc0000082) - xfast_syscall_off;
 
     do_patch(kbase);
+    patch_aio(kbase);
     restore(kbase, uap);
 
     return 0;
@@ -60,6 +62,78 @@ void restore(void *kbase, struct kexec_args *uap) {
     for (int i = 0; i < 0x30; i += 8) {
         write64(kbase, 0x1107f00 + i, sysent_661_save[i / 8]);
     }
+}
+
+void patch_aio(void *kbase) {
+    disable_cr0_wp();
+
+    const u64 aio_off = 0x415A01;
+
+    // patch = {0xeb, 0x48}
+    write16(kbase, aio_off, 0x48eb);
+
+    // offset = 0x42
+    // patch = {0xeb, 0x06}
+    write16(kbase, aio_off + 0x42, 0x06eb);
+
+    // offset = 0x4a
+    // patch = {0x41, 0x83, 0xbf, 0xa0, 0x04, 0x00, 0x00, 0x00}
+    write64(kbase, aio_off + 0x4a, 0x00000004a0bf8341);
+
+    // offset = 0x58
+    // patch = {0x49, 0x8b, 0x87, 0xd0, 0x04, 0x00, 0x00}
+    write32(kbase, aio_off + 0x58, 0xd0878b49);
+    write16(kbase, aio_off + 0x5c, 0x0004);
+    write8(kbase, aio_off + 0x5e, 0x00);
+
+    // offset = 0x65
+    // patch = {0x49, 0x8b, 0xb7, 0xb0, 0x04, 0x00, 0x00}
+    write32(kbase, aio_off + 0x65, 0xb0b78b49);
+    write16(kbase, aio_off + 0x69, 0x0004);
+    write8(kbase, aio_off + 0x6b, 0x00);
+
+    // offset = 0x7d
+    // patch = {0x49, 0x8b, 0x87, 0x40, 0x05, 0x00, 0x00}
+    write32(kbase, aio_off + 0x7d, 0x40878b49);
+    write16(kbase, aio_off + 0x81, 0x0005);
+    write8(kbase, aio_off + 0x83, 0x00);
+
+    // offset = 0x8a
+    // patch = {0x49, 0x8b, 0xb7, 0x20, 0x05, 0x00, 0x00}
+    write32(kbase, aio_off + 0x8a, 0x20b78b49);
+    write16(kbase, aio_off + 0x8e, 0x0005);
+    write8(kbase, aio_off + 0x90, 0x00);
+
+    // offset = 0xa2
+    // patch = {0x49, 0x8d, 0xbf, 0xc0, 0x00, 0x00, 0x00}
+    write32(kbase, aio_off + 0xa2, 0xc0bf8d49);
+    write16(kbase, aio_off + 0xa6, 0x0000);
+    write8(kbase, aio_off + 0xa8, 0x00);
+
+    // offset = 0xae
+    // patch = {0x49, 0x8d, 0xbf, 0xe0, 0x00, 0x00, 0x00}
+    write32(kbase, aio_off + 0xae, 0xe0bf8d49);
+    write16(kbase, aio_off + 0xb2, 0x0000);
+    write8(kbase, aio_off + 0xb4, 0x00);
+
+    // offset = 0xc1
+    // patch = {0x49, 0x8d, 0xbf, 0x00, 0x01, 0x00, 0x00}
+    write32(kbase, aio_off + 0xc1, 0x00bf8d49);
+    write16(kbase, aio_off + 0xc5, 0x0001);
+    write8(kbase, aio_off + 0xc7, 0x00);
+
+    // offset = 0xcd
+    // patch = {0x49, 0x8d, 0xbf, 0x20, 0x01, 0x00, 0x00}
+    write32(kbase, aio_off + 0xcd, 0x20bf8d49);
+    write16(kbase, aio_off + 0xd1, 0x0001);
+    write8(kbase, aio_off + 0xd3, 0x00);
+
+    // offset = 0xde
+    // patch = {0x49, 0x8b, 0xff}
+    write16(kbase, aio_off + 0xde, 0x8b49);
+    write8(kbase, aio_off + 0xe0, 0xff);
+
+    enable_cr0_wp();
 }
 
 void do_patch(void *kbase) {
