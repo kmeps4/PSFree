@@ -31,17 +31,21 @@ struct kexec_args {
     u64 arg5;
 };
 
-void do_patch(void);
-void restore(struct kexec_args *uap);
+void do_patch(void *kbase);
+void restore(void *kbase, struct kexec_args *uap);
 
 __attribute__((section (".text.start")))
 int kpatch(void *td, struct kexec_args *uap) {
-    do_patch();
-    restore(uap);
+    const u64 xfast_syscall_off = 0x1c0;
+    void * const kbase = (void *)rdmsr(0xc0000082) - xfast_syscall_off;
+
+    do_patch(kbase);
+    restore(kbase, uap);
+
     return 0;
 }
 
-void restore(struct kexec_args *uap) {
+void restore(void *kbase, struct kexec_args *uap) {
     u8 *pipe = uap->arg1;
     u8 *pipebuf = uap->arg2;
     for (size_t i = 0; i < 0x18; i++) {
@@ -52,21 +56,13 @@ void restore(struct kexec_args *uap) {
     u64 *pktinfo_field2 = uap->arg4;
     *pktinfo_field2 = 0;
 
-    // get kernel base
-    const u64 xfast_syscall_off = 0x1c0;
-    void * const kbase = (void *)rdmsr(0xc0000082) - xfast_syscall_off;
-
     u64 *sysent_661_save = uap->arg5;
     for (int i = 0; i < 0x30; i += 8) {
         write64(kbase, 0x1107f00 + i, sysent_661_save[i / 8]);
     }
 }
 
-void do_patch(void) {
-    // offset to fast_syscall()
-    const size_t off_fast_syscall = 0x1c0;
-    void * const kbase = (void *)rdmsr(0xc0000082) - off_fast_syscall;
-
+void do_patch(void *kbase) {
     disable_cr0_wp();
 
     // ChendoChap's patches from pOOBs4 ///////////////////////////////////////
