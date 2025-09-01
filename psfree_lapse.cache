@@ -7,8 +7,7 @@ cache.html
 config.mjs
 index.html
 lapse.mjs
-aio_patches.bin
-goldhen.bin
+payload.bin
 psfree.mjs
 fonts\LiberationMono-Regular.ttf
 kpatch\900.elf
