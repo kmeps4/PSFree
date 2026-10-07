@@ -1,47 +1,96 @@
-<!-- Copyright (C) 2023-2025 anonymous
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMORABK / SHAHM - PS4 9.00</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0c10;
+      color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .glow-bg {
+      position: absolute;
+      width: 400px; height: 400px;
+      background: linear-gradient(45deg, #ff007f, #00f0ff);
+      filter: blur(150px); border-radius: 50%; z-index: 1; opacity: 0.6;
+    }
+    .container {
+      position: relative; z-index: 2;
+      background: rgba(18, 22, 35, 0.85);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      border-radius: 24px; padding: 40px; text-align: center;
+      box-shadow: 0 0 40px rgba(0, 240, 255, 0.15);
+      max-width: 480px; width: 90%;
+    }
+    h1 {
+      font-size: 2.2rem; font-weight: 900; letter-spacing: 2px;
+      text-transform: uppercase; color: #fff;
+      text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f;
+      margin-bottom: 5px;
+    }
+    .subtitle { font-size: 1rem; color: #00f0ff; margin-bottom: 25px; font-weight: bold; }
+    .btn-jb {
+      background: linear-gradient(135deg, #ff007f, #00f0ff);
+      border: none; padding: 16px 30px; font-size: 1.1rem;
+      font-weight: bold; color: #fff; border-radius: 14px;
+      cursor: pointer; box-shadow: 0 0 20px rgba(255, 0, 127, 0.4);
+      margin-bottom: 15px; width: 100%; text-transform: uppercase;
+    }
+    .status { font-size: 1.1rem; color: #00f0ff; margin-top: 15px; font-weight: bold; }
+    .insta-box {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 0, 127, 0.3);
+      padding: 10px 20px; border-radius: 30px; text-decoration: none;
+      color: #ff007f; font-weight: 600; margin-top: 20px; font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <div class="container">
+    <h1>AMORABK / SHAHM</h1>
+    <div class="subtitle">PS4 9.00 Jailbreak Host</div>
+    
+    <button class="btn-jb" id="jbBtn" onclick="runExploit()">تفعيل الثغرة</button>
+    <div class="status" id="statusText">جاهز للتشغيل</div>
 
-This file is part of PSFree.
+    <br>
+    <a href="https://instagram.com/amora_baker78" target="_blank" class="insta-box">
+      📷 instagram: amora_baker78
+    </a>
+  </div>
 
-PSFree is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
+  <script>
+    function runExploit() {
+      var btn = document.getElementById('jbBtn');
+      var status = document.getElementById('statusText');
+      
+      btn.style.display = 'none';
+      status.innerText = "جاري تحميل وتفعيل الثغرة...";
 
-PSFree is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
--->
-<html>
-    <head>
-        <meta charset='utf-8'>
-        <title>PSFree-Lapse Exploit For PS4 9.00</title>
-        <style>
-            @font-face {
-                font-family: 'logging';
-                src: url('fonts/LiberationMono-Regular.ttf');
-            }
-            #console {
-                font-family: 'logging';
-            }
-        </style>
-        <script>
-        if (window.applicationCache.status=='0')
-        {
-          window.location.replace("cache.html");
-        }
-        </script>
-    </head>
-    <body>
-        PSFree: A PS4/PS5 Exploit Chain
-        <br>
-        <br>
-        See <a href='./about.html' data-jslicense='1'>JavaScript license information</a> for the
-        source code and license.<br>
-        <pre id='console'></pre>
-    </body>
-    <script type='module' src='./alert.mjs'></script>
+      // استدعاء السكريبت المباشر المتوافق تماماً مع الـ PS4
+      var script = document.createElement('script');
+      script.src = "https://ps4.tarunas.dev/900/psfree.js"; // أو السكريبت الأساسي المستقر
+      script.onload = function() {
+        status.innerText = "تم حقن الثغرة بنجاح! يرجى إدخال الفلاشة.";
+      };
+      script.onerror = function() {
+        status.innerText = "فشل الاتصال، تحقق من الشبكة.";
+        btn.style.display = 'block';
+      };
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
 </html>
